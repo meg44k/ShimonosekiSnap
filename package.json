@@ -11,10 +11,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "mind-ar": "^1.2.5",
+    "mind-ar": "1.2.5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "three": "^0.160.0"
+    "three": "0.160.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
