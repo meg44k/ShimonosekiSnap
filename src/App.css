@@ -3,27 +3,41 @@
   display: flex;
   flex-direction: column;
   min-height: 100svh;
+  background-color: var(--bg);
 }
 
 .app-header {
-  padding: 20px;
+  padding: 16px 20px;
   text-align: center;
   border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.spot-badge {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  padding: 3px 12px;
+  border-radius: 999px;
+  margin-bottom: 6px;
 }
 
 .app-header h1 {
-  font-size: 28px;
+  font-size: 26px;
   margin: 0;
   letter-spacing: -0.5px;
 
   @media (max-width: 1024px) {
-    font-size: 22px;
+    font-size: 20px;
   }
 }
 
 .subtitle {
   margin-top: 4px;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text);
 }
 
@@ -33,7 +47,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 20px;
 }
 
 /* ===== Error ===== */
@@ -58,28 +72,40 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  max-width: 500px;
+  width: 100%;
 }
 
 .camera-icon {
-  font-size: 80px;
+  font-size: 64px;
   line-height: 1;
   animation: pulse 2s ease-in-out infinite;
 }
 
 @keyframes pulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
+  50% { transform: scale(1.08); }
+}
+
+.start-screen h2 {
+  margin: 4px 0 0 0;
+  font-size: 22px;
 }
 
 .start-screen p {
-  font-size: 16px;
+  font-size: 15px;
   color: var(--text);
+  margin: 0;
 }
 
-.effect-hint {
-  font-size: 14px;
-  color: var(--accent);
+.qr-detected-badge {
+  font-size: 13px;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 4px 14px;
+  border-radius: 999px;
   font-weight: 500;
 }
 
@@ -87,25 +113,36 @@
 .effect-preview {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin: 8px 0 16px;
-  padding: 16px 24px;
+  justify-content: center;
+  gap: 14px;
+  margin: 10px 0 16px;
+  padding: 16px 20px;
   background: var(--social-bg);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 16px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .effect-preview-img {
-  width: 80px;
-  height: auto;
-  border-radius: 8px;
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
 }
 
 .effect-preview-label {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
+}
+
+.start-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 320px;
 }
 
 /* ===== Buttons ===== */
@@ -114,17 +151,21 @@
   border: none;
   border-radius: 12px;
   font-family: var(--sans);
-  font-size: 16px;
-  font-weight: 500;
-  transition: transform 0.15s, box-shadow 0.2s;
+  font-size: 15px;
+  font-weight: 600;
+  transition: transform 0.15s, box-shadow 0.2s, background-color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .btn:active {
-  transform: scale(0.96);
+  transform: scale(0.97);
 }
 
 .btn-primary {
-  padding: 14px 32px;
+  padding: 14px 28px;
   background: var(--accent);
   color: #fff;
 }
@@ -133,8 +174,13 @@
   box-shadow: 0 4px 16px rgba(170, 59, 255, 0.35);
 }
 
+.btn-lg {
+  font-size: 16px;
+  padding: 16px 28px;
+}
+
 .btn-secondary {
-  padding: 14px 32px;
+  padding: 12px 24px;
   background: var(--social-bg);
   color: var(--text-h);
   border: 1px solid var(--border);
@@ -148,7 +194,7 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.18);
   backdrop-filter: blur(8px);
   font-size: 22px;
   display: flex;
@@ -158,7 +204,7 @@
 }
 
 .btn-icon:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.35);
 }
 
 /* ===== Shutter Button ===== */
@@ -224,20 +270,20 @@
 /* ===== エフェクトオーバーレイ（カメラプレビュー上） ===== */
 .overlay {
   position: absolute;
-  bottom: 0;
-  height: 40%;
+  bottom: 8px;
+  height: 38%;
   width: auto;
   pointer-events: none;
-  opacity: 0.85;
   z-index: 2;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4));
 }
 
 .overlay-left {
-  left: 0;
+  left: 8px;
 }
 
 .overlay-right {
-  right: 0;
+  right: 8px;
 }
 
 .camera-controls {
@@ -245,7 +291,7 @@
   align-items: center;
   justify-content: center;
   gap: 32px;
-  padding: 20px;
+  padding: 18px;
   background: rgba(0, 0, 0, 0.85);
 }
 
@@ -275,4 +321,69 @@
 .preview-controls {
   display: flex;
   gap: 12px;
+}
+
+/* ===== QR Modal ===== */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.modal-content {
+  background: var(--bg);
+  color: var(--text-h);
+  border-radius: 20px;
+  padding: 24px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+}
+
+.modal-content h3 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+}
+
+.modal-desc {
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+.qr-container {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  background: #fff;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+}
+
+.qr-image {
+  width: 200px;
+  height: 200px;
+  display: block;
+}
+
+.qr-url-box {
+  background: var(--code-bg);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  word-break: break-all;
+  margin-bottom: 16px;
+}
+
+.modal-close-btn {
+  width: 100%;
 }
