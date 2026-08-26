@@ -25,6 +25,7 @@ export function ArCameraView({ onCapture, onClose, onError }: ArCameraViewProps)
   useEffect(() => {
     if (!containerRef.current) return
     let cancelled = false
+    let started = false
 
     const mindarThree = new MindARThree({
       container: containerRef.current,
@@ -62,6 +63,7 @@ export function ArCameraView({ onCapture, onClose, onError }: ArCameraViewProps)
       .start()
       .then(() => {
         if (cancelled) return
+        started = true
         setReady(true)
         renderer.setAnimationLoop(() => {
           const transform = targetVisible
@@ -84,7 +86,12 @@ export function ArCameraView({ onCapture, onClose, onError }: ArCameraViewProps)
     return () => {
       cancelled = true
       renderer.setAnimationLoop(null)
-      mindarThree.stop()
+      // start()が解決する前にクリーンアップが走ると(StrictModeの二重実行や、
+      // 起動直後に閉じるケースで発生しうる)、mind-ar内部が未初期化のまま
+      // stop()を呼び出しエラーになるため、start()解決後のみ呼び出す
+      if (started) {
+        mindarThree.stop()
+      }
       mindarRef.current = null
     }
   }, [onError])
