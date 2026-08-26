@@ -1,3 +1,56 @@
+# shimonoseki-snap
+
+React + TypeScript + Vite で構築したフロントエンドプロジェクトです。
+
+## セットアップ
+
+```bash
+npm install
+```
+
+## 起動方法
+
+### ローカルで起動
+
+```bash
+npm run dev
+```
+
+`http://localhost:5173` で開発サーバーが起動します。
+
+### Dockerで起動
+
+```bash
+docker compose up -d
+```
+
+`http://localhost:5173` にアクセスすると確認できます。ポート5173が別プロセスで使用中の場合は `docker-compose.yml` の `ports` を変更してください。
+
+ソースコードはボリュームマウントされているため、`src/`などを編集すると再ビルドなしでHMRが即座に反映されます。ただし以下の場合は再ビルドが必要です。
+
+```bash
+docker compose up -d --build
+```
+
+- `package.json` / `package-lock.json` を変更したとき(依存関係の変更)
+- `Dockerfile` 自体を変更したとき
+
+停止する場合:
+
+```bash
+docker compose down
+```
+
+## その他のコマンド
+
+| コマンド | 説明 |
+| --- | --- |
+| `npm run build` | 型チェック(`tsc -b`)を行い本番用にビルド(`dist/`に出力) |
+| `npm run preview` | ビルド済み(`dist/`)の内容をローカルでプレビュー |
+| `npm run lint` | Oxlintによる静的解析を実行 |
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
