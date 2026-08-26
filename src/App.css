@@ -72,13 +72,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   max-width: 500px;
   width: 100%;
 }
 
 .camera-icon {
-  font-size: 64px;
+  font-size: 60px;
   line-height: 1;
   animation: pulse 2s ease-in-out infinite;
 }
@@ -89,7 +89,7 @@
 }
 
 .start-screen h2 {
-  margin: 4px 0 0 0;
+  margin: 0;
   font-size: 22px;
 }
 
@@ -97,6 +97,8 @@
   font-size: 15px;
   color: var(--text);
   margin: 0;
+  line-height: 1.6;
+  text-align: center;
 }
 
 .qr-detected-badge {
@@ -109,32 +111,54 @@
   font-weight: 500;
 }
 
-/* エフェクトプレビュー（スタート画面） */
-.effect-preview {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  margin: 10px 0 16px;
-  padding: 16px 20px;
+/* キャラクタープレビューカード */
+.character-preview-card {
+  width: 100%;
+  box-sizing: border-box;
   background: var(--social-bg);
   border: 1px solid var(--border);
   border-radius: 16px;
-  width: 100%;
-  box-sizing: border-box;
+  padding: 14px 20px;
+  margin: 6px 0 10px;
 }
 
-.effect-preview-img {
-  width: 84px;
-  height: 84px;
-  object-fit: contain;
-}
-
-.effect-preview-label {
-  font-size: 13px;
-  color: var(--text);
+.character-card-title {
+  font-size: 13px !important;
   font-weight: 600;
-  white-space: nowrap;
+  color: var(--accent) !important;
+  margin-bottom: 10px !important;
+}
+
+.character-pair {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.character-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.character-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+}
+
+.character-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.character-plus {
+  font-size: 18px;
+  color: var(--text);
+  font-weight: bold;
 }
 
 .start-actions {
@@ -240,7 +264,7 @@
   background: #f0f0f0;
 }
 
-/* ===== Camera Screen ===== */
+/* ===== Camera Screen (Clean Viewfinder) ===== */
 .camera-screen {
   width: 100%;
   max-width: 640px;
@@ -267,23 +291,23 @@
   object-fit: cover;
 }
 
-/* ===== エフェクトオーバーレイ（カメラプレビュー上） ===== */
-.overlay {
+.camera-viewfinder-guide {
   position: absolute;
-  bottom: 8px;
-  height: 38%;
-  width: auto;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  padding: 6px 16px;
+  border-radius: 999px;
   pointer-events: none;
-  z-index: 2;
-  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4));
 }
 
-.overlay-left {
-  left: 8px;
-}
-
-.overlay-right {
-  right: 8px;
+.guide-text {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
 }
 
 .camera-controls {
@@ -302,7 +326,23 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
+}
+
+.reveal-badge {
+  background: linear-gradient(135deg, rgba(170, 59, 255, 0.15), rgba(220, 38, 38, 0.15));
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  padding: 8px 20px;
+  border-radius: 999px;
+  animation: popIn 0.4s ease-out;
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.85); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 .photo-container {
@@ -321,6 +361,7 @@
 .preview-controls {
   display: flex;
   gap: 12px;
+  margin-top: 4px;
 }
 
 /* ===== QR Modal ===== */

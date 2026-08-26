@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
-import biwaHoshiImg from './assets/biwa_hoshi.png'
-import heikeNyokanImg from './assets/heike_nyokan.png'
+import hoichiImg from './assets/miminashi_hoichi.png'
+import antokuImg from './assets/antoku_tenno.png'
 import './App.css'
 
 type AppState = 'idle' | 'camera' | 'preview'
@@ -15,8 +15,9 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
   const [showQrModal, setShowQrModal] = useState<boolean>(false)
+  const [isCapturing, setIsCapturing] = useState<boolean>(false)
 
-  // QRコードからアクセスされたか判定 (?spot=akama や ?camera=1 など)
+  // QRコードからアクセスされたか判定
   const [isFromQr, setIsFromQr] = useState<boolean>(false)
 
   const stopCamera = useCallback(() => {
@@ -58,9 +59,7 @@ function App() {
 
     if (spot === 'akama' || autoCamera === 'true' || autoCamera === '1' || spot !== null) {
       setIsFromQr(true)
-      // モバイルブラウザでの自動起動を試行
       startCamera('environment').catch(() => {
-        // ユーザー操作が必要な場合はidle画面で「カメラを起動」を押してもらう
         setState('idle')
       })
     }
@@ -76,54 +75,57 @@ function App() {
     })
   }
 
-  /** 撮影してエフェクト（左右の画像）を合成 */
+  /** 写真を撮影し、自動で耳なし芳一と安徳天皇を合成 */
   const takePhoto = useCallback(async () => {
     const video = videoRef.current
     const canvas = canvasRef.current
-    if (!video || !canvas) return
+    if (!video || !canvas || isCapturing) return
 
+    setIsCapturing(true)
     const vw = video.videoWidth
     const vh = video.videoHeight
     canvas.width = vw
     canvas.height = vh
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx) {
+      setIsCapturing(false)
+      return
+    }
 
-    // 1) カメラ映像を描画
+    // 1) 撮影時のカメラ映像を描画
     ctx.drawImage(video, 0, 0, vw, vh)
 
-    // 2) エフェクト画像を左右に合成（透過PNG）
+    // 2) 撮影後の写真に自動で「耳なし芳一」と「安徳天皇」を合成
     try {
       const [leftImg, rightImg] = await Promise.all([
-        loadImage(biwaHoshiImg),
-        loadImage(heikeNyokanImg),
+        loadImage(hoichiImg),
+        loadImage(antokuImg),
       ])
 
-      // エフェクトのサイズ: 写真の高さの38%を基準にアスペクト比を維持
+      // 写真の高さの約38%のサイズで配置
       const effectHeight = vh * 0.38
-      
+
+      // 左下: 耳なし芳一
       const leftScale = effectHeight / leftImg.naturalHeight
       const leftW = leftImg.naturalWidth * leftScale
       const leftH = effectHeight
+      ctx.drawImage(leftImg, 12, vh - leftH - 12, leftW, leftH)
 
+      // 右下: 安徳天皇
       const rightScale = effectHeight / rightImg.naturalHeight
       const rightW = rightImg.naturalWidth * rightScale
       const rightH = effectHeight
-
-      // 左下に琵琶法師
-      ctx.drawImage(leftImg, 10, vh - leftH - 10, leftW, leftH)
-
-      // 右下に平家の女官
-      ctx.drawImage(rightImg, vw - rightW - 10, vh - rightH - 10, rightW, rightH)
+      ctx.drawImage(rightImg, vw - rightW - 12, vh - rightH - 12, rightW, rightH)
     } catch (e) {
-      console.warn('エフェクト画像の合成に失敗しました:', e)
+      console.warn('キャラクター画像の合成に失敗しました:', e)
     }
 
     const url = canvas.toDataURL('image/png')
     setPhotoUrl(url)
     stopCamera()
+    setIsCapturing(false)
     setState('preview')
-  }, [stopCamera])
+  }, [stopCamera, isCapturing])
 
   const retake = useCallback(() => {
     setPhotoUrl(null)
@@ -136,7 +138,7 @@ function App() {
     link.href = photoUrl
     const now = new Date()
     const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
-    link.download = `akama_shrine_snap_${timestamp}.png`
+    link.download = `akama_snap_hoichi_antoku_${timestamp}.png`
     link.click()
   }, [photoUrl])
 
@@ -152,7 +154,7 @@ function App() {
     }
   }, [stopCamera])
 
-  // テスト用QRコードURL（現在のURLに ?spot=akama を付与）
+  // テスト用QRコードURL
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : ''
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : ''
   const spotUrl = `${currentOrigin}${currentPath}?spot=akama`
@@ -161,9 +163,9 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <div className="spot-badge">⛩️ スポット: 赤間神宮</div>
-        <h1>赤間神宮 フォトスナップ</h1>
-        <p className="subtitle">QRコード読み込み連動カメラ</p>
+        <div className="spot-badge">⛩️ 赤間神宮 スポット</div>
+        <h1>赤間神宮 スナップ</h1>
+        <p className="subtitle">撮影すると写真の中に歴史上の人物が現れます</p>
       </header>
 
       <main className="app-main">
@@ -173,20 +175,31 @@ function App() {
           </div>
         )}
 
+        {/* スタート画面 */}
         {state === 'idle' && (
           <div className="start-screen">
             <div className="camera-icon">⛩️</div>
-            <h2>赤間神宮限定フレーム</h2>
-            <p>現地QRコード読取で自動起動、または下のボタンから開始できます</p>
+            <h2>赤間神宮限定カメラ</h2>
+            <p>写真を撮影すると、写真の中に<strong>「耳なし芳一」</strong>と<strong>「安徳天皇」</strong>が自動で登場します！</p>
             {isFromQr && (
               <div className="qr-detected-badge">
-                ✨ QRコードを検知しました
+                ✨ QRコードからアクセス中
               </div>
             )}
-            <div className="effect-preview">
-              <img src={biwaHoshiImg} alt="琵琶法師" className="effect-preview-img" />
-              <span className="effect-preview-label">＋ あなたの写真 ＋</span>
-              <img src={heikeNyokanImg} alt="平家女官" className="effect-preview-img" />
+
+            <div className="character-preview-card">
+              <p className="character-card-title">✨ 写真に登場する人物</p>
+              <div className="character-pair">
+                <div className="character-item">
+                  <img src={hoichiImg} alt="耳なし芳一" className="character-thumb" />
+                  <span className="character-name">耳なし芳一</span>
+                </div>
+                <div className="character-plus">×</div>
+                <div className="character-item">
+                  <img src={antokuImg} alt="安徳天皇" className="character-thumb" />
+                  <span className="character-name">安徳天皇</span>
+                </div>
+              </div>
             </div>
 
             <div className="start-actions">
@@ -208,6 +221,7 @@ function App() {
           </div>
         )}
 
+        {/* カメラ撮影画面（プレビュー上に画像を置かず、シンプルなカメラファインダー） */}
         {state === 'camera' && (
           <div className="camera-screen">
             <div className="video-container">
@@ -218,24 +232,16 @@ function App() {
                 muted
                 className="camera-video"
               />
-              {/* カメラプレビュー上の左右エフェクトオーバーレイ */}
-              <img
-                src={biwaHoshiImg}
-                alt="琵琶法師"
-                className="overlay overlay-left"
-              />
-              <img
-                src={heikeNyokanImg}
-                alt="平家女官"
-                className="overlay overlay-right"
-              />
+              <div className="camera-viewfinder-guide">
+                <span className="guide-text">📸 撮影すると二人が現れます</span>
+              </div>
             </div>
             <div className="camera-controls">
               <button
                 type="button"
                 className="btn btn-icon"
                 onClick={switchCamera}
-                title="イン/アウトカメラ切り替え"
+                title="カメラ切り替え"
               >
                 🔄
               </button>
@@ -243,6 +249,7 @@ function App() {
                 type="button"
                 className="btn btn-shutter"
                 onClick={takePhoto}
+                disabled={isCapturing}
                 title="撮影"
               >
                 <span className="shutter-inner" />
@@ -262,14 +269,18 @@ function App() {
           </div>
         )}
 
+        {/* 撮影後プレビュー画面（自動で二人が合成された写真を表示） */}
         {state === 'preview' && photoUrl && (
           <div className="preview-screen">
+            <div className="reveal-badge">
+              ✨ 耳なし芳一 と 安徳天皇 が現れました！
+            </div>
             <div className="photo-container">
-              <img src={photoUrl} alt="撮影した写真" className="preview-photo" />
+              <img src={photoUrl} alt="撮影した写真（耳なし芳一・安徳天皇）" className="preview-photo" />
             </div>
             <div className="preview-controls">
               <button type="button" className="btn btn-secondary" onClick={retake}>
-                📷 撮り直す
+                📷 もう一度撮る
               </button>
               <button type="button" className="btn btn-primary" onClick={downloadPhoto}>
                 💾 写真を保存
@@ -278,12 +289,12 @@ function App() {
           </div>
         )}
 
-        {/* QRコード確認モーダル */}
+        {/* QRコードモーダル */}
         {showQrModal && (
           <div className="modal-backdrop" onClick={() => setShowQrModal(false)}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <h3>📱 赤間神宮 QRコード</h3>
-              <p className="modal-desc">スマホのカメラで読み取ると、直接このカメラ画面が起動します。</p>
+              <h3>📱 赤間神宮 現地QRコード</h3>
+              <p className="modal-desc">スマホで読み取ると、直接このカメラ画面が起動します。</p>
               <div className="qr-container">
                 <img src={qrApiUrl} alt="赤間神宮 QRコード" className="qr-image" />
               </div>
