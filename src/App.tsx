@@ -1,69 +1,29 @@
-import { useRef, useState, useCallback, useEffect } from 'react'
+import { useCallback, useState } from 'react'
+import { ArCameraView } from './features/ar/ArCameraView'
 import './App.css'
 
 type AppState = 'idle' | 'camera' | 'preview'
 
 function App() {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-
   const [state, setState] = useState<AppState>('idle')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
 
-  const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-    }
+  const handleCapture = useCallback((dataUrl: string) => {
+    setPhotoUrl(dataUrl)
+    setState('preview')
   }, [])
 
-  const startCamera = useCallback(async (facing: 'user' | 'environment') => {
-    setError(null)
-    try {
-      stopCamera()
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: facing,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
-        audio: false,
-      })
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-      }
-      setState('camera')
-    } catch {
-      setError('カメラへのアクセスが拒否されました。ブラウザの設定からカメラの使用を許可してください。')
-      setState('idle')
-    }
-  }, [stopCamera])
-
-  const takePhoto = useCallback(() => {
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    if (!video || !canvas) return
-
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    ctx.drawImage(video, 0, 0)
-    const url = canvas.toDataURL('image/png')
-    setPhotoUrl(url)
-    stopCamera()
-    setState('preview')
-  }, [stopCamera])
+  const handleArError = useCallback((message: string) => {
+    setError(message)
+    setState('idle')
+  }, [])
 
   const retake = useCallback(() => {
     setPhotoUrl(null)
-    startCamera(facingMode)
-  }, [startCamera, facingMode])
+    setError(null)
+    setState('camera')
+  }, [])
 
   const downloadPhoto = useCallback(() => {
     if (!photoUrl) return
@@ -74,19 +34,6 @@ function App() {
     link.download = `shimonoseki_snap_${timestamp}.png`
     link.click()
   }, [photoUrl])
-
-  const switchCamera = useCallback(() => {
-    const next = facingMode === 'user' ? 'environment' : 'user'
-    setFacingMode(next)
-    startCamera(next)
-  }, [facingMode, startCamera])
-
-  // コンポーネントのアンマウント時にカメラを停止
-  useEffect(() => {
-    return () => {
-      stopCamera()
-    }
-  }, [stopCamera])
 
   return (
     <div className="app">
@@ -109,7 +56,10 @@ function App() {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => startCamera(facingMode)}
+              onClick={() => {
+                setError(null)
+                setState('camera')
+              }}
             >
               カメラを起動
             </button>
@@ -117,46 +67,7 @@ function App() {
         )}
 
         {state === 'camera' && (
-          <div className="camera-screen">
-            <div className="video-container">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="camera-video"
-              />
-            </div>
-            <div className="camera-controls">
-              <button
-                type="button"
-                className="btn btn-icon"
-                onClick={switchCamera}
-                title="カメラ切り替え"
-              >
-                🔄
-              </button>
-              <button
-                type="button"
-                className="btn btn-shutter"
-                onClick={takePhoto}
-                title="撮影"
-              >
-                <span className="shutter-inner" />
-              </button>
-              <button
-                type="button"
-                className="btn btn-icon"
-                onClick={() => {
-                  stopCamera()
-                  setState('idle')
-                }}
-                title="閉じる"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
+          <ArCameraView onCapture={handleCapture} onClose={() => setState('idle')} onError={handleArError} />
         )}
 
         {state === 'preview' && photoUrl && (
@@ -174,9 +85,6 @@ function App() {
             </div>
           </div>
         )}
-
-        {/* 撮影用の非表示キャンバス */}
-        <canvas ref={canvasRef} style={{ display: 'none' }} />
       </main>
     </div>
   )
