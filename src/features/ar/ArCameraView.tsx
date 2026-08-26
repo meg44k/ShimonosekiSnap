@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-// mind-arにTypeScript型定義がないため、次の行の暗黙のany型エラーを抑制する(意図的)
-// @ts-expect-error -- mind-ar has no bundled type declarations
+// @ts-expect-error mind-ar has no bundled TypeScript types
 import { MindARThree } from 'mind-ar/dist/mindar-image-three.prod.js'
 import * as THREE from 'three'
 import { captureComposite } from './captureComposite'
 import { loadWhaleModel } from './loadWhaleModel'
-import { getWhaleTransform, type WhaleTransform } from './whaleAnimation'
+import { getWhaleTransform, HIDDEN_TRANSFORM } from './whaleAnimation'
 
 interface ArCameraViewProps {
   onCapture: (photoDataUrl: string) => void
@@ -13,14 +12,14 @@ interface ArCameraViewProps {
   onError: (message: string) => void
 }
 
-const HIDDEN_TRANSFORM: WhaleTransform = { position: [0, 0, 0], rotationY: 0, visible: false }
-
 export function ArCameraView({ onCapture, onClose, onError }: ArCameraViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   // mind-arにTypeScript型定義がないため、インスタンスの型はanyになる(意図的)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mindarRef = useRef<any>(null)
+  const captureRequestedRef = useRef(false)
   const [ready, setReady] = useState(false)
+  const [targetFound, setTargetFound] = useState(false)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -29,7 +28,10 @@ export function ArCameraView({ onCapture, onClose, onError }: ArCameraViewProps)
 
     const mindarThree = new MindARThree({
       container: containerRef.current,
-      imageTargetSrc: '/targets/tunoshima.mind',
+      imageTargetSrc: `${import.meta.env.BASE_URL}targets/tunoshima.mind`,
+      uiLoading: 'no',
+      uiScanning: 'no',
+      uiError: 'no',
     })
     mindarRef.current = mindarThree
     const { renderer, scene, camera } = mindarThree
@@ -40,30 +42,36 @@ export function ArCameraView({ onCapture, onClose, onError }: ArCameraViewProps)
     anchor.group.add(whaleGroup)
 
     let targetVisible = false
+    let startedAt = performance.now()
     anchor.onTargetFound = () => {
       targetVisible = true
+      startedAt = performance.now()
+      setTargetFound(true)
     }
     anchor.onTargetLost = () => {
       targetVisible = false
       whaleGroup.visible = false
+      setTargetFound(false)
     }
-
-    const startedAt = performance.now()
 
     loadWhaleModel()
       .then((whale) => {
         if (cancelled) return
         whaleGroup.add(whale)
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error('[ar] failed to load whale model', error)
         if (!cancelled) onError('クジラモデルの読み込みに失敗しました')
       })
 
     mindarThree
       .start()
       .then(() => {
-        if (cancelled) return
         started = true
+        if (cancelled) {
+          mindarThree.stop()
+          return
+        }
         setReady(true)
         renderer.setAnimationLoop(() => {
           const transform = targetVisible
@@ -75,9 +83,28 @@ export function ArCameraView({ onCapture, onClose, onError }: ArCameraViewProps)
             whaleGroup.rotation.y = transform.rotationY
           }
           renderer.render(scene, camera)
+
+          if (captureRequestedRef.current) {
+            captureRequestedRef.current = false
+            try {
+              const videoEl: HTMLVideoElement | null =
+                mindarThree.video ?? containerRef.current?.querySelector('video') ?? null
+              if (!videoEl) {
+                onError('カメラ映像を取得できませんでした')
+              } else {
+                onCapture(captureComposite(videoEl, renderer.domElement))
+              }
+            } catch (error) {
+              console.error('[ar] failed to capture photo', error)
+              onError('撮影に失敗しました')
+            }
+          }
         })
       })
-      .catch(() => {
+      // mindarThree.start()の戻り値は型定義がないためanyになり、
+      // catchの引数も暗黙のanyになるので明示的にunknownを指定する
+      .catch((error: unknown) => {
+        console.error('[ar] failed to start camera/tracking', error)
         if (!cancelled) {
           onError('カメラを起動できませんでした。ブラウザの設定からカメラの使用を許可してください。')
         }
@@ -86,32 +113,37 @@ export function ArCameraView({ onCapture, onClose, onError }: ArCameraViewProps)
     return () => {
       cancelled = true
       renderer.setAnimationLoop(null)
-      // start()が解決する前にクリーンアップが走ると(StrictModeの二重実行や、
-      // 起動直後に閉じるケースで発生しうる)、mind-ar内部が未初期化のまま
-      // stop()を呼び出しエラーになるため、start()解決後のみ呼び出す
       if (started) {
         mindarThree.stop()
       }
+      renderer.dispose()
+      whaleGroup.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose()
+          const materials = Array.isArray(object.material) ? object.material : [object.material]
+          for (const material of materials) {
+            material.dispose()
+          }
+        }
+      })
       mindarRef.current = null
     }
   }, [onError])
 
   const handleShutter = () => {
-    const mindarThree = mindarRef.current
-    if (!mindarThree) return
-    const videoEl: HTMLVideoElement | null =
-      mindarThree.video ?? containerRef.current?.querySelector('video') ?? null
-    if (!videoEl) {
-      onError('カメラ映像を取得できませんでした')
-      return
-    }
-    const photoDataUrl = captureComposite(videoEl, mindarThree.renderer.domElement)
-    onCapture(photoDataUrl)
+    captureRequestedRef.current = true
   }
 
   return (
     <div className="camera-screen">
-      <div className="video-container ar-container" ref={containerRef} />
+      <div className="video-container">
+        <div className="ar-container" ref={containerRef} />
+        {(!ready || !targetFound) && (
+          <div className="ar-status-overlay">
+            {!ready ? 'カメラを起動中...' : '角島大橋を映してください'}
+          </div>
+        )}
+      </div>
       <div className="camera-controls">
         <button
           type="button"

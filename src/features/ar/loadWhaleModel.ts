@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+// whale.glb: "Whale" by Quaternius (poly.pizza), CC0
 import whaleModelUrl from '../../assets/models/whale.glb?url'
 
 // 初期見積もり値。実機での見た目を見ながら調整する(Task 6で確認)

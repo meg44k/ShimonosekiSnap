@@ -16,7 +16,7 @@ const FLIGHT_DURATION_MS = 4000
 const PAUSE_DURATION_MS = 1500
 export const CYCLE_DURATION_MS = FLIGHT_DURATION_MS + PAUSE_DURATION_MS
 
-const HIDDEN_TRANSFORM: WhaleTransform = {
+export const HIDDEN_TRANSFORM: WhaleTransform = {
   position: [0, 0, 0],
   rotationY: 0,
   visible: false,

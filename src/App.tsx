@@ -1,6 +1,9 @@
-import { useCallback, useState } from 'react'
-import { ArCameraView } from './features/ar/ArCameraView'
+import { Suspense, lazy, useCallback, useState } from 'react'
 import './App.css'
+
+const ArCameraView = lazy(() =>
+  import('./features/ar/ArCameraView').then((module) => ({ default: module.ArCameraView })),
+)
 
 type AppState = 'idle' | 'camera' | 'preview'
 
@@ -67,7 +70,9 @@ function App() {
         )}
 
         {state === 'camera' && (
-          <ArCameraView onCapture={handleCapture} onClose={() => setState('idle')} onError={handleArError} />
+          <Suspense fallback={<div className="camera-screen" />}>
+            <ArCameraView onCapture={handleCapture} onClose={() => setState('idle')} onError={handleArError} />
+          </Suspense>
         )}
 
         {state === 'preview' && photoUrl && (
