@@ -75,7 +75,7 @@ function App() {
     })
   }
 
-  /** 写真を撮影し、自動で耳なし芳一と安徳天皇を合成 */
+  /** 写真を撮影し、耳なし芳一と安徳天皇を同じ大きさ・大きめサイズで自動合成 */
   const takePhoto = useCallback(async () => {
     const video = videoRef.current
     const canvas = canvasRef.current
@@ -95,27 +95,28 @@ function App() {
     // 1) 撮影時のカメラ映像を描画
     ctx.drawImage(video, 0, 0, vw, vh)
 
-    // 2) 撮影後の写真に自動で「耳なし芳一」と「安徳天皇」を合成
+    // 2) 撮影後の写真に「耳なし芳一」と「安徳天皇」をサイズを揃えて大きく合成
     try {
       const [leftImg, rightImg] = await Promise.all([
         loadImage(hoichiImg),
         loadImage(antokuImg),
       ])
 
-      // 写真の高さの約38%のサイズで配置
-      const effectHeight = vh * 0.38
+      // 写真の高さの45%（横幅の38%上限）を基準に両者の高さを統一
+      const targetHeight = Math.min(vh * 0.46, vw * 0.38)
+      const margin = Math.max(12, Math.round(vh * 0.02))
 
       // 左下: 耳なし芳一
-      const leftScale = effectHeight / leftImg.naturalHeight
+      const leftScale = targetHeight / leftImg.naturalHeight
       const leftW = leftImg.naturalWidth * leftScale
-      const leftH = effectHeight
-      ctx.drawImage(leftImg, 12, vh - leftH - 12, leftW, leftH)
+      const leftH = targetHeight
+      ctx.drawImage(leftImg, margin, vh - leftH - margin, leftW, leftH)
 
       // 右下: 安徳天皇
-      const rightScale = effectHeight / rightImg.naturalHeight
+      const rightScale = targetHeight / rightImg.naturalHeight
       const rightW = rightImg.naturalWidth * rightScale
-      const rightH = effectHeight
-      ctx.drawImage(rightImg, vw - rightW - 12, vh - rightH - 12, rightW, rightH)
+      const rightH = targetHeight
+      ctx.drawImage(rightImg, vw - rightW - margin, vh - rightH - margin, rightW, rightH)
     } catch (e) {
       console.warn('キャラクター画像の合成に失敗しました:', e)
     }
@@ -221,7 +222,7 @@ function App() {
           </div>
         )}
 
-        {/* カメラ撮影画面（プレビュー上に画像を置かず、シンプルなカメラファインダー） */}
+        {/* カメラ撮影画面 */}
         {state === 'camera' && (
           <div className="camera-screen">
             <div className="video-container">
@@ -269,7 +270,7 @@ function App() {
           </div>
         )}
 
-        {/* 撮影後プレビュー画面（自動で二人が合成された写真を表示） */}
+        {/* 撮影後プレビュー画面 */}
         {state === 'preview' && photoUrl && (
           <div className="preview-screen">
             <div className="reveal-badge">
