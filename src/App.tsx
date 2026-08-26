@@ -40,10 +40,12 @@ function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>📸 ShimonosekiSnap</h1>
-        <p className="subtitle">下関の思い出を写真に残そう</p>
-      </header>
+      {state !== 'camera' && (
+        <header className="app-header">
+          <h1>📸 ShimonosekiSnap</h1>
+          <p className="subtitle">下関の思い出を写真に残そう</p>
+        </header>
+      )}
 
       <main className="app-main">
         {error && (
