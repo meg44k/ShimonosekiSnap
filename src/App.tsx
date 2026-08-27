@@ -11,8 +11,8 @@ const ArCameraView = lazy(() =>
 
 type AppState = 'idle' | 'camera' | 'preview'
 
-function resolveInitialLocation(): LocationConfig | null {
-  const route = parseRoute(window.location.pathname)
+export function resolveLocation(pathname: string): LocationConfig | null {
+  const route = parseRoute(pathname)
   if (route.type === 'spot') {
     return getLocation(route.id) ?? null
   }
@@ -20,7 +20,7 @@ function resolveInitialLocation(): LocationConfig | null {
 }
 
 function App() {
-  const [location] = useState<LocationConfig | null>(resolveInitialLocation)
+  const [location] = useState<LocationConfig | null>(() => resolveLocation(window.location.pathname))
   const [state, setState] = useState<AppState>(location ? 'camera' : 'idle')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)

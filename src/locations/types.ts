@@ -6,6 +6,13 @@ export interface ArTransform {
   visible: boolean
 }
 
+/**
+ * loadModel()が返したオブジェクトの所有権はArCameraViewに移る。
+ * カメラ画面のアンマウント時にgeometry/materialがdisposeされるため、
+ * loadModel()は呼び出しごとに新しいインスタンスを返すこと
+ * (キャッシュしたインスタンスを使い回すと、2回目以降のマウントで
+ * disposeされたgeometryを参照してしまう)。
+ */
 export interface ArEffect {
   loadModel(): Promise<THREE.Object3D>
   getTransform(elapsedMs: number): ArTransform

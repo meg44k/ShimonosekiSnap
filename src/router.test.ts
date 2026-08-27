@@ -26,4 +26,8 @@ describe('parseRoute', () => {
   it('decodes a URL-encoded id', () => {
     expect(parseRoute('/spot/some%20place')).toEqual({ type: 'spot', id: 'some place' })
   })
+
+  it('returns root when the spot id is malformed percent-encoding', () => {
+    expect(parseRoute('/spot/%')).toEqual({ type: 'root' })
+  })
 })

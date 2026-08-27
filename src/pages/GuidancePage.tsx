@@ -13,7 +13,7 @@ export function GuidancePage() {
           <ul>
             {locations.map((location) => (
               <li key={location.id}>
-                <a href={`/spot/${location.id}`}>{location.name}</a>
+                <a href={`/spot/${encodeURIComponent(location.id)}`}>{location.name}</a>
               </li>
             ))}
           </ul>

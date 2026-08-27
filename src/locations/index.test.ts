@@ -18,4 +18,9 @@ describe('locations registry', () => {
     const locations = listLocations()
     expect(locations.some((location) => location.id === 'tsunoshima')).toBe(true)
   })
+
+  it('has no duplicate ids among registered locations', () => {
+    const ids = listLocations().map((location) => location.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
 })

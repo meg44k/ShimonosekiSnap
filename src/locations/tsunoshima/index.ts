@@ -1,5 +1,4 @@
 import type { LocationConfig } from '../types'
-import { loadWhaleModel } from './loadWhaleModel'
 import { getWhaleTransform } from './whaleAnimation'
 
 export const tsunoshimaLocation: LocationConfig = {
@@ -8,7 +7,7 @@ export const tsunoshimaLocation: LocationConfig = {
   guidanceText: '角島大橋を映してください',
   targetSrc: 'targets/tunoshima.mind',
   effect: {
-    loadModel: loadWhaleModel,
+    loadModel: () => import('./loadWhaleModel').then((m) => m.loadWhaleModel()),
     getTransform: getWhaleTransform,
   },
 }
