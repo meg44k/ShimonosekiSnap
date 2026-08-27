@@ -37,12 +37,19 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
     })
     mindarRef.current = mindarThree
     const { renderer, scene, camera } = mindarThree
+    renderer.localClippingEnabled = true
 
     const anchor = mindarThree.addAnchor(0)
     const effectGroup = new THREE.Group()
     effectGroup.visible = false
     anchor.group.add(effectGroup)
     let modelUpdate: ((deltaSeconds: number) => void) | null = null
+    // clippingPlanesはアンカー(マーカー)のローカル座標系で定義されるため、
+    // 毎フレームアンカーのワールド行列を掛けてワールド座標系に変換したものを
+    // マテリアルに割り当てる(worldClippingPlanesは参照を維持したまま
+    // 中身だけ更新する。マテリアル側にはこの配列の参照を渡す)。
+    let localClippingPlanes: THREE.Plane[] = []
+    let worldClippingPlanes: THREE.Plane[] = []
 
     let targetVisible = false
     let startedAt = performance.now()
@@ -63,6 +70,18 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
         if (cancelled) return
         effectGroup.add(model.object)
         modelUpdate = model.update ?? null
+        if (model.clippingPlanes && model.clippingPlanes.length > 0) {
+          localClippingPlanes = model.clippingPlanes
+          worldClippingPlanes = localClippingPlanes.map(() => new THREE.Plane())
+          model.object.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              const materials = Array.isArray(child.material) ? child.material : [child.material]
+              for (const material of materials) {
+                material.clippingPlanes = worldClippingPlanes
+              }
+            }
+          })
+        }
       })
       .catch((error) => {
         console.error('[ar] failed to load effect model', error)
@@ -91,6 +110,12 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
             effectGroup.rotation.x = transform.rotationX
             effectGroup.rotation.y = transform.rotationY
             modelUpdate?.(deltaSeconds * (transform.animationSpeed ?? 1))
+            if (localClippingPlanes.length > 0) {
+              anchor.group.updateMatrixWorld(true)
+              for (let i = 0; i < localClippingPlanes.length; i++) {
+                worldClippingPlanes[i].copy(localClippingPlanes[i]).applyMatrix4(anchor.group.matrixWorld)
+              }
+            }
           }
           renderer.render(scene, camera)
 

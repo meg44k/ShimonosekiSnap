@@ -24,10 +24,18 @@ export interface ArTransform {
  *
  * updateは省略可能。モデルに埋め込みアニメーションがある場合、
  * ArCameraViewが毎フレーム呼び出す(引数は前フレームからの経過秒数)。
+ *
+ * clippingPlanesも省略可能。アンカー(マーカー)のローカル座標系で
+ * 定義された固定の平面を指定すると、ArCameraViewが毎フレーム
+ * アンカーのワールド行列を掛けてワールド座標系に変換し、
+ * objectの各メッシュのマテリアルに適用する(平面の正の側=描画される側)。
+ * 例: 海面の高さに平面を置き、水面より下を描画しないことで
+ * 「海から出てくる」ような見た目にする。
  */
 export interface LoadedEffectModel {
   object: THREE.Object3D
   update?: (deltaSeconds: number) => void
+  clippingPlanes?: THREE.Plane[]
 }
 
 export interface ArEffect {
