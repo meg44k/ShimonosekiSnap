@@ -6,7 +6,7 @@ describe('getWhaleTransform', () => {
     const result = getWhaleTransform(0)
     expect(result.visible).toBe(true)
     expect(result.position[0]).toBeCloseTo(-0.2656, 3)
-    expect(result.position[1]).toBeCloseTo(-0.0965, 3)
+    expect(result.position[1]).toBeCloseTo(-0.15, 3)
     expect(result.position[2]).toBeCloseTo(0, 3)
   })
 
@@ -14,8 +14,16 @@ describe('getWhaleTransform', () => {
     const result = getWhaleTransform(2000)
     expect(result.visible).toBe(true)
     expect(result.position[0]).toBeCloseTo(0.0372, 3)
-    expect(result.position[1]).toBeCloseTo(0.0977, 3)
+    expect(result.position[1]).toBeCloseTo(0.0573, 3)
     expect(result.position[2]).toBeCloseTo(0.04, 3)
+  })
+
+  it('starts and ends below sea level so the group-visibility cutoff never fires while the whale is still poking through the clipping plane (loadWhaleModel.ts SEA_LEVEL_Y = -0.07)', () => {
+    const SEA_LEVEL_Y = -0.07
+    const atStart = getWhaleTransform(0)
+    const atEnd = getWhaleTransform(3999)
+    expect(atStart.position[1]).toBeLessThan(SEA_LEVEL_Y)
+    expect(atEnd.position[1]).toBeLessThan(SEA_LEVEL_Y)
   })
 
   it('is hidden during the pause after the flight completes', () => {
