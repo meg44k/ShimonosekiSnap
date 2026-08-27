@@ -4,8 +4,13 @@ import type { LoadedEffectModel } from '../types'
 // whale.glb: "Whale" by Quaternius (poly.pizza), CC0
 import whaleModelUrl from './whale.glb?url'
 
-// 初期見積もり値。実機での見た目を見ながら調整する
-const WHALE_SCALE = 0.05
+// 初期見積もり値。実機での見た目を見ながら調整する。
+// whale.glbの実測サイズ(頭から尾まで約20ユニット、Three.jsの簡易検証
+// シーンで実測)にWHALE_SCALEを掛けた値が、マーカー座標系での全長になる。
+// 0.05だと全長が約1.0(=tunoshima.jpgの横幅とほぼ同じ)になり、頭が橋を
+// 通り過ぎても尾がまだ橋の上に残ってしまっていたため、0.02(全長約0.4、
+// 画像横幅の4割程度)に縮小した。
+const WHALE_SCALE = 0.02
 const WHALE_BASE_ROTATION_X = 0
 const WHALE_BASE_ROTATION_Y = 0
 
