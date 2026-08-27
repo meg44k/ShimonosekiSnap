@@ -49,6 +49,15 @@ docker compose down
 | `npm run preview` | ビルド済み(`dist/`)の内容をローカルでプレビュー |
 | `npm run lint` | Oxlintによる静的解析を実行 |
 
+## デプロイ時の注意(複数場所対応)
+
+このアプリは `/spot/:id` のようなURLに直接アクセスされる前提(QRコード経由)です。本番環境で `dist/` を配信する場合、以下に注意してください。
+
+- 静的ホスティング(S3、GitHub Pages、素のnginx等)では、`/spot/:id` のような存在しないファイルパスへのアクセスが404になってしまうため、**存在しない全てのパスを `index.html` にフォールバックさせるSPA用の書き換え設定**が必要です(例: nginxの`try_files`、Netlifyの`_redirects`等)。
+- 現状、アプリはルートドメイン(サブパスなし)でのデプロイを前提としています。サブパス配信(Viteの`base`設定)は現在完全には対応していません。
+
+なお、`npm run dev` および `docker compose up`(開発サーバー)では、Viteの開発サーバーがSPAフォールバックを標準で行うため、この設定なしでも動作します。
+
 ---
 
 # React + TypeScript + Vite
