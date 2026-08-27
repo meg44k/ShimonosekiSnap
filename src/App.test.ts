@@ -11,6 +11,12 @@ describe('resolveLocation', () => {
     expect(location?.id).toBe('tsunoshima')
   })
 
+  it('returns the location config for akama spot', () => {
+    const location = resolveLocation('/spot/akama')
+    expect(location?.id).toBe('akama')
+    expect(location?.name).toBe('赤間神宮')
+  })
+
   it('returns null for an unknown spot id', () => {
     expect(resolveLocation('/spot/doesnotexist')).toBeNull()
   })
