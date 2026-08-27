@@ -12,7 +12,7 @@ interface ArCameraViewProps {
   onError: (message: string) => void
 }
 
-const HIDDEN_TRANSFORM: ArTransform = { position: [0, 0, 0], rotationY: 0, visible: false }
+const HIDDEN_TRANSFORM: ArTransform = { position: [0, 0, 0], rotationX: 0, rotationY: 0, visible: false }
 
 export function ArCameraView({ location, onCapture, onClose, onError }: ArCameraViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -42,6 +42,7 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
     const effectGroup = new THREE.Group()
     effectGroup.visible = false
     anchor.group.add(effectGroup)
+    let modelUpdate: ((deltaSeconds: number) => void) | null = null
 
     let targetVisible = false
     let startedAt = performance.now()
@@ -60,7 +61,8 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
       .loadModel()
       .then((model) => {
         if (cancelled) return
-        effectGroup.add(model)
+        effectGroup.add(model.object)
+        modelUpdate = model.update ?? null
       })
       .catch((error) => {
         console.error('[ar] failed to load effect model', error)
@@ -76,14 +78,19 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
           return
         }
         setReady(true)
+        let lastFrameAt = performance.now()
         renderer.setAnimationLoop(() => {
-          const transform = targetVisible
-            ? location.effect.getTransform(performance.now() - startedAt)
-            : HIDDEN_TRANSFORM
+          const now = performance.now()
+          const deltaSeconds = (now - lastFrameAt) / 1000
+          lastFrameAt = now
+
+          const transform = targetVisible ? location.effect.getTransform(now - startedAt) : HIDDEN_TRANSFORM
           effectGroup.visible = transform.visible
           if (transform.visible) {
             effectGroup.position.set(...transform.position)
+            effectGroup.rotation.x = transform.rotationX
             effectGroup.rotation.y = transform.rotationY
+            modelUpdate?.(deltaSeconds * (transform.animationSpeed ?? 1))
           }
           renderer.render(scene, camera)
 
