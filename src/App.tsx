@@ -1,4 +1,8 @@
 import { Suspense, lazy, useCallback, useState } from 'react'
+import { getLocation } from './locations'
+import type { LocationConfig } from './locations/types'
+import { GuidancePage } from './pages/GuidancePage'
+import { parseRoute } from './router'
 import './App.css'
 
 const ArCameraView = lazy(() =>
@@ -7,8 +11,17 @@ const ArCameraView = lazy(() =>
 
 type AppState = 'idle' | 'camera' | 'preview'
 
+function resolveInitialLocation(): LocationConfig | null {
+  const route = parseRoute(window.location.pathname)
+  if (route.type === 'spot') {
+    return getLocation(route.id) ?? null
+  }
+  return null
+}
+
 function App() {
-  const [state, setState] = useState<AppState>('idle')
+  const [location] = useState<LocationConfig | null>(resolveInitialLocation)
+  const [state, setState] = useState<AppState>(location ? 'camera' : 'idle')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -29,14 +42,28 @@ function App() {
   }, [])
 
   const downloadPhoto = useCallback(() => {
-    if (!photoUrl) return
+    if (!photoUrl || !location) return
     const link = document.createElement('a')
     link.href = photoUrl
     const now = new Date()
     const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
-    link.download = `shimonoseki_snap_${timestamp}.png`
+    link.download = `shimonoseki_snap_${location.id}_${timestamp}.png`
     link.click()
-  }, [photoUrl])
+  }, [photoUrl, location])
+
+  if (!location) {
+    return (
+      <div className="app">
+        <header className="app-header">
+          <h1>📸 ShimonosekiSnap</h1>
+          <p className="subtitle">下関の思い出を写真に残そう</p>
+        </header>
+        <main className="app-main">
+          <GuidancePage />
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="app">
@@ -57,7 +84,7 @@ function App() {
         {state === 'idle' && (
           <div className="start-screen">
             <div className="camera-icon">📷</div>
-            <p>カメラを起動して写真を撮影しましょう</p>
+            <p>{location.name}にカメラを向けて撮影しましょう</p>
             <button
               type="button"
               className="btn btn-primary"
@@ -73,7 +100,13 @@ function App() {
 
         {state === 'camera' && (
           <Suspense fallback={<div className="camera-screen" />}>
-            <ArCameraView onCapture={handleCapture} onClose={() => setState('idle')} onError={handleArError} />
+            <ArCameraView
+              key={location.id}
+              location={location}
+              onCapture={handleCapture}
+              onClose={() => setState('idle')}
+              onError={handleArError}
+            />
           </Suspense>
         )}
 
