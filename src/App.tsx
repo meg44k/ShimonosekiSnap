@@ -1,8 +1,8 @@
-import { Suspense, lazy, useCallback, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { getLocation } from './locations'
 import type { LocationConfig } from './locations/types'
 import { GuidancePage } from './pages/GuidancePage'
-import { parseRoute } from './router'
+import { navigate, parseRoute, useRoute } from './router'
 import './App.css'
 
 const ArCameraView = lazy(() =>
@@ -20,10 +20,23 @@ export function resolveLocation(pathname: string): LocationConfig | null {
 }
 
 function App() {
-  const [location] = useState<LocationConfig | null>(() => resolveLocation(window.location.pathname))
-  const [state, setState] = useState<AppState>(location ? 'camera' : 'idle')
+  const route = useRoute()
+  const location = route.type === 'spot' ? getLocation(route.id) ?? null : null
+
+  const [state, setState] = useState<AppState>('idle')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // ルートまたはロケーションが変化したときにカメラ起動状態へ遷移
+  useEffect(() => {
+    setError(null)
+    setPhotoUrl(null)
+    if (location) {
+      setState('camera')
+    } else {
+      setState('idle')
+    }
+  }, [location])
 
   const handleCapture = useCallback((dataUrl: string) => {
     setPhotoUrl(dataUrl)
@@ -55,7 +68,12 @@ function App() {
     return (
       <div className="app">
         <header className="app-header">
-          <h1>📸 ShimonosekiSnap</h1>
+          <h1
+            style={{ cursor: 'pointer' }}
+            onClick={() => navigate('/')}
+          >
+            📸 ShimonosekiSnap
+          </h1>
           <p className="subtitle">下関の思い出を写真に残そう</p>
         </header>
         <main className="app-main">
@@ -69,7 +87,12 @@ function App() {
     <div className="app">
       {state !== 'camera' && (
         <header className="app-header">
-          <h1>📸 ShimonosekiSnap</h1>
+          <h1
+            style={{ cursor: 'pointer' }}
+            onClick={() => navigate('/')}
+          >
+            📸 ShimonosekiSnap
+          </h1>
           <p className="subtitle">下関の思い出を写真に残そう</p>
         </header>
       )}
@@ -84,17 +107,27 @@ function App() {
         {state === 'idle' && (
           <div className="start-screen">
             <div className="camera-icon">📷</div>
-            <p>{location.name}にカメラを向けて撮影しましょう</p>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => {
-                setError(null)
-                setState('camera')
-              }}
-            >
-              カメラを起動
-            </button>
+            <h2>{location.name}</h2>
+            <p>{location.guidanceText}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '280px' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setError(null)
+                  setState('camera')
+                }}
+              >
+                カメラを起動
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => navigate('/')}
+              >
+                ← スポット一覧に戻る
+              </button>
+            </div>
           </div>
         )}
 

@@ -1,4 +1,5 @@
 import { listLocations } from '../locations'
+import { navigate } from '../router'
 
 export function GuidancePage() {
   const locations = listLocations()
@@ -13,7 +14,15 @@ export function GuidancePage() {
           <ul>
             {locations.map((location) => (
               <li key={location.id}>
-                <a href={`/spot/${encodeURIComponent(location.id)}`}>{location.name}</a>
+                <a
+                  href={`/spot/${encodeURIComponent(location.id)}`}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    navigate(`/spot/${encodeURIComponent(location.id)}`)
+                  }}
+                >
+                  {location.name}
+                </a>
               </li>
             ))}
           </ul>

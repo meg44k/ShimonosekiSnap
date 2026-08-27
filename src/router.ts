@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 export type Route = { type: 'root' } | { type: 'spot'; id: string }
 
 const SPOT_PATH_PATTERN = /^\/spot\/([^/]+)\/?$/
@@ -12,4 +14,30 @@ export function parseRoute(pathname: string): Route {
     }
   }
   return { type: 'root' }
+}
+
+export function navigate(path: string): void {
+  if (window.location.pathname !== path) {
+    window.history.pushState({}, '', path)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }
+}
+
+export function useRoute(): Route {
+  const [route, setRoute] = useState<Route>(() =>
+    typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { type: 'root' },
+  )
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setRoute(parseRoute(window.location.pathname))
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [])
+
+  return route
 }
