@@ -2,15 +2,11 @@ import { FilesetResolver, PoseLandmarker, type NormalizedLandmark } from '@media
 
 export interface HandPoseInfo {
   detected: boolean
-  // ビデオ正規化座標 (0.0 〜 1.0)
   x: number
   y: number
   z: number
-  // 刀の回転角 (ラジアン)
   angle: number
-  // スケール係数
   scale: number
-  // 信頼度
   score: number
 }
 
@@ -21,30 +17,57 @@ export interface PoseTrackingResult {
 }
 
 let poseLandmarkerInstance: PoseLandmarker | null = null
-let initPromise: Promise<PoseLandmarker> | null = null
+let initPromise: Promise<PoseLandmarker | null> | null = null
 
-export async function getPoseLandmarker(): Promise<PoseLandmarker> {
+export async function getPoseLandmarker(): Promise<PoseLandmarker | null> {
   if (poseLandmarkerInstance) return poseLandmarkerInstance
   if (initPromise) return initPromise
 
   initPromise = (async () => {
-    const vision = await FilesetResolver.forVisionTasks(
-      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm',
-    )
-    const landmarker = await PoseLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath:
-          'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
-        delegate: 'GPU',
-      },
-      runningMode: 'VIDEO',
-      numPoses: 1,
-      minPoseDetectionConfidence: 0.5,
-      minPosePresenceConfidence: 0.5,
-      minTrackingConfidence: 0.5,
-    })
-    poseLandmarkerInstance = landmarker
-    return landmarker
+    try {
+      const vision = await FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm',
+      )
+
+      const modelUrl =
+        'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task'
+
+      // まず GPU デリゲートでの初期化を試行
+      try {
+        const landmarker = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: modelUrl,
+            delegate: 'GPU',
+          },
+          runningMode: 'VIDEO',
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.4,
+          minPosePresenceConfidence: 0.4,
+          minTrackingConfidence: 0.4,
+        })
+        poseLandmarkerInstance = landmarker
+        return landmarker
+      } catch (gpuError) {
+        console.warn('[poseTracker] GPU delegate failed, falling back to CPU:', gpuError)
+        // CPU デリゲートで再試行
+        const landmarker = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: modelUrl,
+            delegate: 'CPU',
+          },
+          runningMode: 'VIDEO',
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.4,
+          minPosePresenceConfidence: 0.4,
+          minTrackingConfidence: 0.4,
+        })
+        poseLandmarkerInstance = landmarker
+        return landmarker
+      }
+    } catch (err) {
+      console.warn('[poseTracker] Failed to load MediaPipe PoseLandmarker:', err)
+      return null
+    }
   })()
 
   return initPromise
@@ -98,7 +121,7 @@ function extractHandPose(
   index: NormalizedLandmark | undefined,
   smoother: Smoother,
 ): HandPoseInfo {
-  if (!wrist || !elbow || (wrist.visibility !== undefined && wrist.visibility < 0.4)) {
+  if (!wrist || !elbow || (wrist.visibility !== undefined && wrist.visibility < 0.3)) {
     return {
       detected: false,
       x: smoother.x,
@@ -119,7 +142,7 @@ function extractHandPose(
   let armDx = wrist.x - elbow.x
   let armDy = wrist.y - elbow.y
 
-  if (index && (index.visibility === undefined || index.visibility > 0.3)) {
+  if (index && (index.visibility === undefined || index.visibility > 0.2)) {
     // 指先の方向も加味してより自然な刃先の向きにする
     armDx = armDx * 0.4 + (index.x - wrist.x) * 0.6
     armDy = armDy * 0.4 + (index.y - wrist.y) * 0.6
@@ -150,31 +173,27 @@ function extractHandPose(
  * ビデオフレームから人物の手の姿勢を抽出する
  */
 export function estimateHandPoses(
-  landmarker: PoseLandmarker,
+  landmarker: PoseLandmarker | null,
   video: HTMLVideoElement,
   timestampMs: number,
 ): PoseTrackingResult {
-  const emptyResult: PoseTrackingResult = {
-    rightHand: { detected: false, x: 0.7, y: 0.6, z: 0, angle: -Math.PI / 3, scale: 1.0, score: 0 },
-    leftHand: { detected: false, x: 0.3, y: 0.6, z: 0, angle: -Math.PI * 0.7, scale: 1.0, score: 0 },
+  const defaultResult: PoseTrackingResult = {
+    rightHand: { detected: false, x: 0.65, y: 0.6, z: 0, angle: -Math.PI / 3, scale: 1.1, score: 0 },
+    leftHand: { detected: false, x: 0.35, y: 0.6, z: 0, angle: -Math.PI * 0.7, scale: 1.1, score: 0 },
     hasPerson: false,
   }
 
-  if (video.videoWidth === 0 || video.videoHeight === 0) {
-    return emptyResult
+  if (!landmarker || video.videoWidth === 0 || video.videoHeight === 0) {
+    return defaultResult
   }
 
   try {
     const result = landmarker.detectForVideo(video, timestampMs)
     if (!result.landmarks || result.landmarks.length === 0) {
-      return emptyResult
+      return defaultResult
     }
 
     const landmarks = result.landmarks[0]
-    // 11: left_shoulder, 12: right_shoulder
-    // 13: left_elbow, 14: right_elbow
-    // 15: left_wrist, 16: right_wrist
-    // 19: left_index, 20: right_index
     const leftShoulder = landmarks[11]
     const rightShoulder = landmarks[12]
     const leftElbow = landmarks[13]
@@ -194,6 +213,6 @@ export function estimateHandPoses(
     }
   } catch (err) {
     console.warn('[poseTracker] Error detecting pose:', err)
-    return emptyResult
+    return defaultResult
   }
 }

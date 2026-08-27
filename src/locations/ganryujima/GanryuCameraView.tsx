@@ -4,6 +4,7 @@ import { captureComposite } from '../../features/ar/captureComposite'
 import type { LocationConfig } from '../types'
 import { loadKatanaModel } from './loadKatanaModel'
 import { getPoseLandmarker, estimateHandPoses } from './poseTracker'
+import type { PoseLandmarker } from '@mediapipe/tasks-vision'
 
 interface GanryuCameraViewProps {
   location: LocationConfig
@@ -14,14 +15,15 @@ interface GanryuCameraViewProps {
 
 type StanceMode = 'auto' | 'right' | 'left' | 'dual'
 
-export function GanryuCameraView({ location, onCapture, onClose, onError }: GanryuCameraViewProps) {
+export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const captureRequestedRef = useRef<boolean>(false)
 
-  const [ready, setReady] = useState<boolean>(false)
+  const [cameraReady, setCameraReady] = useState<boolean>(false)
+  const [modelReady, setModelReady] = useState<boolean>(false)
   const [poseDetected, setPoseDetected] = useState<boolean>(false)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
   const [stanceMode, setStanceMode] = useState<StanceMode>('auto')
@@ -36,18 +38,28 @@ export function GanryuCameraView({ location, onCapture, onClose, onError }: Ganr
   const startCamera = useCallback(async (facing: 'user' | 'environment') => {
     try {
       stopCamera()
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // 端末の仕様に柔軟に適合するカメラ制約
+      const constraints: MediaStreamConstraints = {
         video: {
-          facingMode: facing,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          facingMode: { ideal: facing },
         },
         audio: false,
-      })
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
       streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
+
+      const video = videoRef.current
+      if (video) {
+        video.srcObject = stream
+        video.onloadedmetadata = () => {
+          video.play().then(() => {
+            setCameraReady(true)
+          }).catch((e) => {
+            console.warn('[GanryuCameraView] Video play warning:', e)
+            setCameraReady(true)
+          })
+        }
       }
       return stream
     } catch (err) {
@@ -60,8 +72,12 @@ export function GanryuCameraView({ location, onCapture, onClose, onError }: Ganr
   useEffect(() => {
     let cancelled = false
     let animationFrameId: number
+    let landmarkerInstance: PoseLandmarker | null = null
 
-    // 1) Three.js シーンとレンダラーの初期化
+    // 1) カメラをまず起動
+    startCamera(facingMode)
+
+    // 2) Three.js シーンとレンダラーの初期化
     const scene = new THREE.Scene()
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100)
     camera.position.z = 10
@@ -74,17 +90,16 @@ export function GanryuCameraView({ location, onCapture, onClose, onError }: Ganr
     })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setSize(window.innerWidth, window.innerHeight)
-    renderer.shadowMap.enabled = true
 
-    // ライティング（刀の金属光沢と陰影を強調）
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2)
+    // ライティング
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.3)
     scene.add(ambientLight)
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 2.0)
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 2.2)
     dirLight1.position.set(5, 10, 7)
     scene.add(dirLight1)
 
-    const dirLight2 = new THREE.DirectionalLight(0xd4af37, 1.0)
+    const dirLight2 = new THREE.DirectionalLight(0xd4af37, 1.2)
     dirLight2.position.set(-5, -5, 5)
     scene.add(dirLight2)
 
@@ -96,111 +111,112 @@ export function GanryuCameraView({ location, onCapture, onClose, onError }: Ganr
     scene.add(rightKatanaGroup)
     scene.add(leftKatanaGroup)
 
-    // 2) 刀モデルとMediaPipeの非同期読み込み
-    Promise.all([loadKatanaModel(), getPoseLandmarker(), startCamera(facingMode)])
-      .then(([katanaModel, landmarker, stream]) => {
-        if (cancelled || !stream) return
+    // 3) 刀モデルとMediaPipeをバックグラウンドで非同期読み込み
+    Promise.allSettled([loadKatanaModel(), getPoseLandmarker()]).then((results) => {
+      if (cancelled) return
 
-        // 刀モデルを右手用と左手用にクローン
+      const modelResult = results[0]
+      const landmarkerResult = results[1]
+
+      if (modelResult.status === 'fulfilled') {
+        const katanaModel = modelResult.value
         rightKatanaGroup.add(katanaModel)
         const leftModel = katanaModel.clone(true)
         leftKatanaGroup.add(leftModel)
+        setModelReady(true)
+      } else {
+        console.error('[GanryuCameraView] Model load error:', modelResult.reason)
+      }
 
-        setReady(true)
+      if (landmarkerResult.status === 'fulfilled' && landmarkerResult.value) {
+        landmarkerInstance = landmarkerResult.value
+      }
 
-        // 3) 毎フレームのアニメーション・トラッキングループ
-        const renderLoop = () => {
-          if (cancelled) return
+      // 4) 描画・トラッキングループ開始
+      const renderLoop = () => {
+        if (cancelled) return
 
-          const video = videoRef.current
-          if (video && video.readyState >= 2 && landmarker) {
-            const vw = video.videoWidth
-            const vh = video.videoHeight
-            const aspect = vw / vh
+        const video = videoRef.current
+        if (video && video.readyState >= 2) {
+          const vw = video.videoWidth || 640
+          const vh = video.videoHeight || 480
+          const aspect = vw / vh
 
-            // レンダラーと正射影カメラのアスペクト比をビデオに同期
-            camera.left = -aspect
-            camera.right = aspect
-            camera.top = 1
-            camera.bottom = -1
-            camera.updateProjectionMatrix()
+          // 正射影カメラとレンダラーのアスペクト比を同期
+          camera.left = -aspect
+          camera.right = aspect
+          camera.top = 1
+          camera.bottom = -1
+          camera.updateProjectionMatrix()
 
-            if (canvasRef.current) {
-              const rect = video.getBoundingClientRect()
-              if (rect.width > 0 && rect.height > 0) {
-                renderer.setSize(rect.width, rect.height, false)
-              }
-            }
-
-            // 人物ポーズのリアルタイム推定
-            const poses = estimateHandPoses(landmarker, video, performance.now())
-            const isDetected = poses.hasPerson
-            setPoseDetected(isDetected)
-
-            // 表示モード（自動／右手／左手／二刀流）に応じた刀の配置
-            const showRight =
-              stanceMode === 'dual' ||
-              stanceMode === 'right' ||
-              (stanceMode === 'auto' && (poses.rightHand.detected || !poses.leftHand.detected))
-
-            const showLeft =
-              stanceMode === 'dual' ||
-              stanceMode === 'left' ||
-              (stanceMode === 'auto' && poses.leftHand.detected && !poses.rightHand.detected)
-
-            // --- 右手の刀配置 ---
-            if (showRight) {
-              rightKatanaGroup.visible = true
-              // ビデオ座標 (0〜1) ➔ Three.js 座標系 (-aspect〜aspect, -1〜1)
-              const posX = (poses.rightHand.x * 2 - 1) * aspect
-              const posY = -(poses.rightHand.y * 2 - 1)
-              rightKatanaGroup.position.set(posX, posY, 2)
-              rightKatanaGroup.rotation.z = -poses.rightHand.angle
-              const sc = poses.rightHand.scale * (vh / 600)
-              rightKatanaGroup.scale.set(sc, sc, sc)
-            } else {
-              rightKatanaGroup.visible = false
-            }
-
-            // --- 左手の刀配置 ---
-            if (showLeft) {
-              leftKatanaGroup.visible = true
-              const posX = (poses.leftHand.x * 2 - 1) * aspect
-              const posY = -(poses.leftHand.y * 2 - 1)
-              leftKatanaGroup.position.set(posX, posY, 2)
-              leftKatanaGroup.rotation.z = -poses.leftHand.angle + Math.PI * 0.3
-              const sc = poses.leftHand.scale * (vh / 600)
-              leftKatanaGroup.scale.set(-sc, sc, sc) // 左手用に反転
-            } else {
-              leftKatanaGroup.visible = false
-            }
-
-            renderer.render(scene, camera)
-
-            // シャッター押下時の写真合成
-            if (captureRequestedRef.current) {
-              captureRequestedRef.current = false
-              try {
-                const photoDataUrl = captureComposite(video, renderer.domElement)
-                onCapture(photoDataUrl)
-              } catch (err) {
-                console.error('[GanryuCameraView] Capture error:', err)
-                onError('写真の撮影に失敗しました')
-              }
+          if (canvasRef.current) {
+            const rect = video.getBoundingClientRect()
+            if (rect.width > 0 && rect.height > 0) {
+              renderer.setSize(rect.width, rect.height, false)
             }
           }
 
-          animationFrameId = requestAnimationFrame(renderLoop)
+          // 人物ポーズ推定
+          const poses = estimateHandPoses(landmarkerInstance, video, performance.now())
+          setPoseDetected(poses.hasPerson)
+
+          // 構えモードに応じた配置
+          const showRight =
+            stanceMode === 'dual' ||
+            stanceMode === 'right' ||
+            (stanceMode === 'auto' && (poses.rightHand.detected || !poses.leftHand.detected))
+
+          const showLeft =
+            stanceMode === 'dual' ||
+            stanceMode === 'left' ||
+            (stanceMode === 'auto' && poses.leftHand.detected && !poses.rightHand.detected)
+
+          // 右手の刀配置
+          if (showRight && rightKatanaGroup.children.length > 0) {
+            rightKatanaGroup.visible = true
+            const posX = (poses.rightHand.x * 2 - 1) * aspect
+            const posY = -(poses.rightHand.y * 2 - 1)
+            rightKatanaGroup.position.set(posX, posY, 2)
+            rightKatanaGroup.rotation.z = -poses.rightHand.angle
+            const sc = poses.rightHand.scale * (vh / 600)
+            rightKatanaGroup.scale.set(sc, sc, sc)
+          } else {
+            rightKatanaGroup.visible = false
+          }
+
+          // 左手の刀配置
+          if (showLeft && leftKatanaGroup.children.length > 0) {
+            leftKatanaGroup.visible = true
+            const posX = (poses.leftHand.x * 2 - 1) * aspect
+            const posY = -(poses.leftHand.y * 2 - 1)
+            leftKatanaGroup.position.set(posX, posY, 2)
+            leftKatanaGroup.rotation.z = -poses.leftHand.angle + Math.PI * 0.3
+            const sc = poses.leftHand.scale * (vh / 600)
+            leftKatanaGroup.scale.set(-sc, sc, sc)
+          } else {
+            leftKatanaGroup.visible = false
+          }
+
+          renderer.render(scene, camera)
+
+          // 撮影リクエストの処理
+          if (captureRequestedRef.current) {
+            captureRequestedRef.current = false
+            try {
+              const photoDataUrl = captureComposite(video, renderer.domElement)
+              onCapture(photoDataUrl)
+            } catch (err) {
+              console.error('[GanryuCameraView] Capture error:', err)
+              onError('写真の撮影に失敗しました')
+            }
+          }
         }
 
-        renderLoop()
-      })
-      .catch((err) => {
-        console.error('[GanryuCameraView] Init error:', err)
-        if (!cancelled) {
-          onError('刀エフェクトの読み込みに失敗しました')
-        }
-      })
+        animationFrameId = requestAnimationFrame(renderLoop)
+      }
+
+      renderLoop()
+    })
 
     return () => {
       cancelled = true
@@ -242,30 +258,32 @@ export function GanryuCameraView({ location, onCapture, onClose, onError }: Ganr
           }}
         />
 
-        {/* 認識ガイダンスバッジ */}
+        {/* ガイダンスバッジ */}
         <div className="camera-viewfinder-guide" style={{ top: '16px' }}>
           <span className="guide-text">
-            {!ready
-              ? '⚔️ 刀モデルを読み込み中...'
-              : poseDetected
-                ? '⚔️ 刀を構えました！'
-                : '📸 手または上半身を映すと刀が手に握られます'}
+            {!cameraReady
+              ? '📷 カメラを起動中...'
+              : !modelReady
+                ? '⚔️ 刀モデルを準備中...'
+                : poseDetected
+                  ? '⚔️ 刀を構えました！'
+                  : '📸 手または上半身を映すと刀が手に握られます'}
           </span>
         </div>
 
         {/* 構え・スタイル切替ツールバー */}
-        {ready && (
+        {modelReady && (
           <div
             style={{
               position: 'absolute',
-              top: '64px',
+              top: '60px',
               left: '50%',
               transform: 'translateX(-50%)',
               display: 'flex',
-              gap: '8px',
-              background: 'rgba(0,0,0,0.6)',
+              gap: '6px',
+              background: 'rgba(0,0,0,0.65)',
               backdropFilter: 'blur(8px)',
-              padding: '6px 12px',
+              padding: '6px 10px',
               borderRadius: '999px',
               zIndex: 5,
             }}
@@ -273,7 +291,7 @@ export function GanryuCameraView({ location, onCapture, onClose, onError }: Ganr
             <button
               type="button"
               className={`btn ${stanceMode === 'auto' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '4px 12px', fontSize: '12px', borderRadius: '999px' }}
+              style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '999px' }}
               onClick={() => setStanceMode('auto')}
             >
               自動
@@ -281,7 +299,7 @@ export function GanryuCameraView({ location, onCapture, onClose, onError }: Ganr
             <button
               type="button"
               className={`btn ${stanceMode === 'right' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '4px 12px', fontSize: '12px', borderRadius: '999px' }}
+              style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '999px' }}
               onClick={() => setStanceMode('right')}
             >
               右手 ⚔️
@@ -289,7 +307,7 @@ export function GanryuCameraView({ location, onCapture, onClose, onError }: Ganr
             <button
               type="button"
               className={`btn ${stanceMode === 'left' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '4px 12px', fontSize: '12px', borderRadius: '999px' }}
+              style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '999px' }}
               onClick={() => setStanceMode('left')}
             >
               左手 ⚔️
@@ -297,7 +315,7 @@ export function GanryuCameraView({ location, onCapture, onClose, onError }: Ganr
             <button
               type="button"
               className={`btn ${stanceMode === 'dual' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '4px 12px', fontSize: '12px', borderRadius: '999px' }}
+              style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '999px' }}
               onClick={() => setStanceMode('dual')}
             >
               二刀流 ⚔️⚔️
@@ -319,7 +337,7 @@ export function GanryuCameraView({ location, onCapture, onClose, onError }: Ganr
           type="button"
           className="btn btn-shutter"
           onClick={handleShutter}
-          disabled={!ready}
+          disabled={!cameraReady}
           title="撮影"
         >
           <span className="shutter-inner" />
