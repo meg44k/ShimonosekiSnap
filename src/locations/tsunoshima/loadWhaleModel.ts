@@ -1,9 +1,9 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 // whale.glb: "Whale" by Quaternius (poly.pizza), CC0
-import whaleModelUrl from '../../assets/models/whale.glb?url'
+import whaleModelUrl from './whale.glb?url'
 
-// 初期見積もり値。実機での見た目を見ながら調整する(Task 6で確認)
+// 初期見積もり値。実機での見た目を見ながら調整する
 const WHALE_SCALE = 0.05
 const WHALE_BASE_ROTATION_Y = 0
 

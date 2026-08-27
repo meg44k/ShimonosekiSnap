@@ -1,8 +1,4 @@
-export interface WhaleTransform {
-  position: [number, number, number]
-  rotationY: number
-  visible: boolean
-}
+import type { ArTransform } from '../types'
 
 // マーカー座標系(tunoshima.jpgの中心を原点、幅=1、高さ=853/1280)における
 // [開始: 橋左側の海面付近, 頂点: 橋上空, 終了: 橋右側の海面付近]
@@ -16,7 +12,7 @@ const FLIGHT_DURATION_MS = 4000
 const PAUSE_DURATION_MS = 1500
 export const CYCLE_DURATION_MS = FLIGHT_DURATION_MS + PAUSE_DURATION_MS
 
-export const HIDDEN_TRANSFORM: WhaleTransform = {
+export const HIDDEN_TRANSFORM: ArTransform = {
   position: [0, 0, 0],
   rotationY: 0,
   visible: false,
@@ -31,7 +27,7 @@ function bezierTangent(t: number, p0: number, p1: number, p2: number): number {
   return 2 * (1 - t) * (p1 - p0) + 2 * t * (p2 - p1)
 }
 
-export function getWhaleTransform(elapsedMs: number): WhaleTransform {
+export function getWhaleTransform(elapsedMs: number): ArTransform {
   const cycleMs = elapsedMs % CYCLE_DURATION_MS
   if (cycleMs >= FLIGHT_DURATION_MS) {
     return HIDDEN_TRANSFORM
