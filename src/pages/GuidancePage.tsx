@@ -4,13 +4,24 @@ import { navigate } from '../router'
 export function GuidancePage() {
   const locations = listLocations()
 
+  const getIcon = (id: string) => {
+    switch (id) {
+      case 'ganryujima':
+        return '⚔️'
+      case 'akama':
+        return '⛩️'
+      default:
+        return '🌊'
+    }
+  }
+
   return (
     <div className="start-screen">
       <div className="camera-icon">📱</div>
       <p>QRコードを読み取ってください</p>
       {locations.length > 0 && (
         <div className="location-list">
-          <p className="location-list-label">動作確認用リンク</p>
+          <p className="location-list-label">スポット一覧（動作確認リンク）</p>
           <ul>
             {locations.map((location) => (
               <li key={location.id}>
@@ -21,7 +32,7 @@ export function GuidancePage() {
                     navigate(`/spot/${encodeURIComponent(location.id)}`)
                   }}
                 >
-                  {location.name}
+                  {getIcon(location.id)} {location.name}
                 </a>
               </li>
             ))}

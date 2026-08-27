@@ -17,6 +17,12 @@ describe('resolveLocation', () => {
     expect(location?.name).toBe('赤間神宮')
   })
 
+  it('returns the location config for ganryujima spot', () => {
+    const location = resolveLocation('/spot/ganryujima')
+    expect(location?.id).toBe('ganryujima')
+    expect(location?.name).toBe('巌流島')
+  })
+
   it('returns null for an unknown spot id', () => {
     expect(resolveLocation('/spot/doesnotexist')).toBeNull()
   })

@@ -17,14 +17,22 @@ describe('locations registry', () => {
     expect(location?.name).toBe('赤間神宮')
   })
 
+  it('returns the ganryujima location by id', () => {
+    const location = getLocation('ganryujima')
+    expect(location).toBeDefined()
+    expect(location?.id).toBe('ganryujima')
+    expect(location?.name).toBe('巌流島')
+  })
+
   it('returns undefined for an unknown id', () => {
     expect(getLocation('nonexistent')).toBeUndefined()
   })
 
-  it('lists all registered locations, including tsunoshima and akama', () => {
+  it('lists all registered locations, including tsunoshima, akama, and ganryujima', () => {
     const locations = listLocations()
     expect(locations.some((location) => location.id === 'tsunoshima')).toBe(true)
     expect(locations.some((location) => location.id === 'akama')).toBe(true)
+    expect(locations.some((location) => location.id === 'ganryujima')).toBe(true)
   })
 
   it('has no duplicate ids among registered locations', () => {
