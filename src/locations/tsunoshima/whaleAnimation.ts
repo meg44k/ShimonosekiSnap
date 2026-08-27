@@ -61,9 +61,17 @@ export function getWhaleTransform(elapsedMs: number): ArTransform {
 
   // 鼻先が常に進行方向を向くよう、接線ベクトルからヨー(左右)と
   // ピッチ(上下)の両方を求める。上昇中は鼻上げ、下降中は鼻下げになる。
+  //
+  // whale.glbは無回転(rotationX=rotationY=0)のときローカル+Z軸が頭の向き
+  // (Three.jsの簡易検証シーンで実測済み)。Three.jsのデフォルトEuler合成
+  // 順序(XYZ、X→Y→Zの順で適用)でこれを計算すると、頭のワールドY成分は
+  // -sin(rotationX)になる。つまり鼻先を上げたい(dy>0)ときはrotationXを
+  // 負にする必要がある(直感とは逆符号)。
   const rotationY = Math.atan2(dx, dz)
   const horizontalSpeed = Math.hypot(dx, dz)
-  const rotationX = Math.atan2(dy, horizontalSpeed)
+  // 見栄えを良くするため、実際の軌道の傾きより少し大げさに角度をつける
+  const PITCH_EXAGGERATION = 1.4
+  const rotationX = -Math.atan2(dy, horizontalSpeed) * PITCH_EXAGGERATION
 
   return {
     position: [x, y, z],

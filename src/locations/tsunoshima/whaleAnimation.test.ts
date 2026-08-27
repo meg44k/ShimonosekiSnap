@@ -40,14 +40,20 @@ describe('getWhaleTransform', () => {
     expect(secondCycle).toEqual(first)
   })
 
-  it('pitches the nose upward while launching out of the water at the start of the flight', () => {
+  // whale.glbは無回転(rotationX=rotationY=0)のとき、モデルのローカル+Z軸が
+  // 頭の向きになっている(Three.jsの簡易検証シーンで実測済み)。Three.jsの
+  // デフォルトEuler合成順序(XYZ)でこれを計算すると、頭のワールドY成分は
+  // -sin(rotationX)になる。つまり鼻先を上に向けたい(上昇中)ときは
+  // rotationXは負の値、鼻先を下に向けたい(下降中)ときは正の値になる
+  // (直感とは逆符号なので注意)。
+  it('pitches the nose upward (negative rotationX, given local +Z = head) while launching out of the water at the start of the flight', () => {
     const result = getWhaleTransform(0)
-    expect(result.rotationX).toBeGreaterThan(0.3)
+    expect(result.rotationX).toBeLessThan(-0.3)
   })
 
-  it('pitches the nose downward while diving back in near the end of the flight', () => {
+  it('pitches the nose downward (positive rotationX, given local +Z = head) while diving back in near the end of the flight', () => {
     const result = getWhaleTransform(3900)
-    expect(result.rotationX).toBeLessThan(-0.3)
+    expect(result.rotationX).toBeGreaterThan(0.3)
   })
 
   it('is roughly level (near-zero pitch) at the weightless apex of the arc', () => {
