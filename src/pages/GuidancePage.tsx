@@ -28,6 +28,19 @@ export function GuidancePage() {
           </ul>
         </div>
       )}
+
+      <div style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+        <a
+          href="/compile"
+          style={{ fontSize: '13px', color: 'var(--text)', textDecoration: 'underline' }}
+          onClick={(e) => {
+            e.preventDefault()
+            navigate('/compile')
+          }}
+        >
+          ⚙️ 赤間神宮 ARターゲット(.mind)の自動生成・更新
+        </a>
+      </div>
     </div>
   )
 }

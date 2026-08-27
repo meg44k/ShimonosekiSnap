@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
 
-export type Route = { type: 'root' } | { type: 'spot'; id: string }
+export type Route = { type: 'root' } | { type: 'spot'; id: string } | { type: 'compile' }
 
 const SPOT_PATH_PATTERN = /^\/spot\/([^/]+)\/?$/
 
 export function parseRoute(pathname: string): Route {
+  if (pathname === '/compile' || pathname === '/compile/') {
+    return { type: 'compile' }
+  }
+
   const match = pathname.match(SPOT_PATH_PATTERN)
   if (match) {
     try {

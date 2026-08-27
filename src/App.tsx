@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { getLocation } from './locations'
 import type { LocationConfig } from './locations/types'
+import { CompilePage } from './pages/CompilePage'
 import { GuidancePage } from './pages/GuidancePage'
 import { navigate, parseRoute, useRoute } from './router'
 import './App.css'
@@ -64,6 +65,22 @@ function App() {
     link.click()
   }, [photoUrl, location])
 
+  if (route.type === 'compile') {
+    return (
+      <div className="app">
+        <header className="app-header">
+          <h1 style={{ cursor: 'pointer' }} onClick={() => navigate('/')}>
+            📸 ShimonosekiSnap
+          </h1>
+          <p className="subtitle">ARターゲットデータ生成ツール</p>
+        </header>
+        <main className="app-main">
+          <CompilePage />
+        </main>
+      </div>
+    )
+  }
+
   if (!location) {
     return (
       <div className="app">
@@ -106,7 +123,7 @@ function App() {
 
         {state === 'idle' && (
           <div className="start-screen">
-            <div className="camera-icon">📷</div>
+            <div className="camera-icon">⛩️</div>
             <h2>{location.name}</h2>
             <p>{location.guidanceText}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '280px' }}>
