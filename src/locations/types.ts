@@ -18,10 +18,23 @@ export interface ArEffect {
   getTransform(elapsedMs: number): ArTransform
 }
 
-export interface LocationConfig {
+interface BaseLocationConfig {
   id: string
   name: string
   guidanceText: string
+}
+
+export interface ImageTargetLocationConfig extends BaseLocationConfig {
+  cameraMode: 'image-target'
   targetSrc: string
   effect: ArEffect
 }
+
+export interface PersonDetectionLocationConfig extends BaseLocationConfig {
+  cameraMode: 'person-detection'
+  overlaySrc: string
+  costumeSrc: string
+  detectionThreshold: number
+}
+
+export type LocationConfig = ImageTargetLocationConfig | PersonDetectionLocationConfig

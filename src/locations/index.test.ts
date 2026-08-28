@@ -7,7 +7,10 @@ describe('locations registry', () => {
     expect(location).toBeDefined()
     expect(location?.id).toBe('tsunoshima')
     expect(location?.name).toBe('角島大橋')
-    expect(location?.targetSrc).toBe('targets/tunoshima.mind')
+    expect(location?.cameraMode).toBe('image-target')
+    if (location?.cameraMode === 'image-target') {
+      expect(location.targetSrc).toBe('targets/tunoshima.mind')
+    }
   })
 
   it('returns undefined for an unknown id', () => {
@@ -17,6 +20,12 @@ describe('locations registry', () => {
   it('lists all registered locations, including tsunoshima', () => {
     const locations = listLocations()
     expect(locations.some((location) => location.id === 'tsunoshima')).toBe(true)
+  })
+
+  it('registers yumetower as a person-detection location', () => {
+    const location = getLocation('yumetower')
+    expect(location?.name).toBe('海峡ゆめタワー')
+    expect(location?.cameraMode).toBe('person-detection')
   })
 
   it('has no duplicate ids among registered locations', () => {
