@@ -66,10 +66,10 @@ export function getWhaleTransform(elapsedMs: number): ArTransform {
   // ピッチ(上下)の両方を求める。上昇中は鼻上げ、下降中は鼻下げになる。
   //
   // whale.glbは無回転(rotationX=rotationY=0)のときローカル+Z軸が頭の向き
-  // (Three.jsの簡易検証シーンで実測済み)。Three.jsのデフォルトEuler合成
-  // 順序(XYZ、X→Y→Zの順で適用)でこれを計算すると、頭のワールドY成分は
-  // -sin(rotationX)になる。つまり鼻先を上げたい(dy>0)ときはrotationXを
-  // 負にする必要がある(直感とは逆符号)。
+  // (Three.jsの簡易検証シーンで実測済み)。effectGroupはYXZのEuler合成
+  // 順序(Y→X→Zの順で適用)を使う(ArCameraViewで設定)ため、ヨーが
+  // 大きくても頭のワールドY成分はちょうど -sin(rotationX) になる。つまり
+  // 鼻先を上げたい(dy>0)ときはrotationXを負にする必要がある(直感とは逆符号)。
   const rotationY = Math.atan2(dx, dz)
   const horizontalSpeed = Math.hypot(dx, dz)
   // 見栄えを良くするため、実際の軌道の傾きより少し大げさに角度をつける

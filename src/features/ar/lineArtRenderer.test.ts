@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { quantizeTime, resolveRenderTargetSize } from './lineArtRenderer'
+import * as THREE from 'three'
+import {
+  createLineArtRenderer,
+  quantizeTime,
+  resolveRenderTargetSize,
+  WHALE_LINEART_LAYER,
+} from './lineArtRenderer'
 
 describe('quantizeTime', () => {
   it('returns 0 at the start of the first step', () => {
@@ -14,7 +20,7 @@ describe('quantizeTime', () => {
     expect(quantizeTime(130, 8)).toBe(1)
   })
 
-  it('advances one step per second at 8hz after 1s', () => {
+  it('advances eight steps in one second at 8hz', () => {
     expect(quantizeTime(1000, 8)).toBe(8)
   })
 })
@@ -36,9 +42,6 @@ describe('resolveRenderTargetSize', () => {
     expect(resolveRenderTargetSize(0, 0, 2)).toEqual({ width: 1, height: 1 })
   })
 })
-
-import * as THREE from 'three'
-import { createLineArtRenderer, WHALE_LINEART_LAYER } from './lineArtRenderer'
 
 describe('createLineArtRenderer', () => {
   it('exposes the pipeline API and layer constant', () => {

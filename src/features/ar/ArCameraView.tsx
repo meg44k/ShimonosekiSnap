@@ -52,6 +52,11 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
 
     const anchor = mindarThree.addAnchor(0)
     const effectGroup = new THREE.Group()
+    // ヨーが大きい(76〜106°)状態で pitch(rotationX)を効かせるので、
+    // デフォルトの XYZ 合成順序だと pitch がほぼロールに化ける。YXZ に
+    // することで whaleAnimation.ts のコメントどおり頭のワールドY成分が
+    // ちょうど -sin(rotationX) になる。
+    effectGroup.rotation.order = 'YXZ'
     effectGroup.visible = false
     anchor.group.add(effectGroup)
     let modelUpdate: ((deltaSeconds: number) => void) | null = null
@@ -170,9 +175,14 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
           renderer.clear(true, true, true)
 
           if (lineArt) {
-            // 法線プリパス → エッジ検出パス(線画のクジラを画面へ)
-            lineArt.renderLineArt(renderer, scene, camera, now - startedAt)
-            // オーバーレイ: レイヤー0(スパークル・水しぶき)を上に重ねる
+            // 法線プリパス → エッジ検出パス(線画のクジラを画面へ)。
+            // クジラが非表示のコマ(サイクル毎の1.5秒ポーズ、ターゲット
+            // ロスト中)はプリパスもエッジパスも無駄なのでスキップする。
+            if (transform.visible) {
+              lineArt.renderLineArt(renderer, scene, camera, now - startedAt)
+            }
+            // オーバーレイ: レイヤー0(スパークル・水しぶき)を上に重ねる。
+            // ポーズ中もスプラッシュ粒子は animate させ続けたいので常に実行。
             renderer.clearDepth()
             camera.layers.set(0)
             renderer.render(scene, camera)
@@ -214,29 +224,25 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
         mindarThree.stop()
       }
       renderer.dispose()
-      effectGroup.traverse((object) => {
-        if (object instanceof THREE.Mesh) {
+      // Sprite(スパークル/水しぶき)と Mesh の両方を破棄する共通処理。
+      // effectGroup にはスパークルの Sprite が 40 個ぶら下がっているため、
+      // Mesh だけ見ていると SpriteMaterial と CanvasTexture が漏れる。
+      const disposeObject = (object: THREE.Object3D) => {
+        if (object instanceof THREE.Sprite) {
+          object.material.map?.dispose()
+          object.material.dispose()
+        } else if (object instanceof THREE.Mesh) {
           object.geometry.dispose()
           const materials = Array.isArray(object.material) ? object.material : [object.material]
           for (const material of materials) {
             material.dispose()
           }
         }
-      })
+      }
+      effectGroup.traverse(disposeObject)
       if (markerObject) {
         anchor.group.remove(markerObject)
-        markerObject.traverse((object) => {
-          if (object instanceof THREE.Sprite) {
-            object.material.map?.dispose()
-            object.material.dispose()
-          } else if (object instanceof THREE.Mesh) {
-            object.geometry.dispose()
-            const materials = Array.isArray(object.material) ? object.material : [object.material]
-            for (const material of materials) {
-              material.dispose()
-            }
-          }
-        })
+        markerObject.traverse(disposeObject)
       }
       resizeCleanup?.()
       lineArt?.dispose()

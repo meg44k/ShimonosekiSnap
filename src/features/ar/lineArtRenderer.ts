@@ -29,6 +29,7 @@ export const WHALE_LINEART_LAYER = 1
 // --- チューニング用パラメータ(実機で調整。Task 7) ---
 const BOIL_HZ = 8 // 線のゆらぎの更新頻度(回/秒)
 const BOIL_AMP = 1.6 // ゆらぎの振幅(テクセル)
+const BOIL_CELLS = 6.0 // boil のオフセットを共有する空間セルの分割数(小さいほど広い領域が一緒に動く)
 const DEPTH_THRESHOLD = 0.18 // 深度エッジのしきい値(ビュー空間の距離)
 const NORMAL_THRESHOLD = 0.45 // 法線エッジのしきい値(法線ベクトル勾配の長さ)
 const HALO_RADIUS = 2.5 // ハローの膨張半径(テクセル)
@@ -61,6 +62,7 @@ const EDGE_FRAG = /* glsl */ `
   uniform float uDepthThreshold;
   uniform float uNormalThreshold;
   uniform float uBoilAmp;
+  uniform float uBoilCells;
 
   // 非線形の遠近深度(0..1)を線形のビューZ(負値)に変換する
   float linearizeDepth(float d) {
@@ -73,13 +75,20 @@ const EDGE_FRAG = /* glsl */ `
     return fract((p3.x + p3.y) * p3.z);
   }
 
+  // リニア色を sRGB へ変換する(出力先フレームバッファが sRGB のため)
+  vec3 linearToSRGB(vec3 c) {
+    return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
+  }
+
   void main() {
     vec2 texel = 1.0 / uResolution;
 
-    // boil: 数コマに1回だけ変わる、カーネル全体で共通のオフセット
+    // boil: 数コマに1回だけ変わる、領域(セル)ごとに共通のオフセット。
+    // ピクセル単位のノイズにならないよう hash 入力を空間量子化する。
+    vec2 cell = floor(vUv * uBoilCells);
     vec2 boil = (vec2(
-      hash12(vUv * 37.0 + uStep),
-      hash12(vUv * 37.0 + uStep + 19.7)
+      hash12(cell + uStep),
+      hash12(cell + uStep + 19.7)
     ) - 0.5) * uBoilAmp * texel;
     vec2 uv = vUv + boil;
 
@@ -120,7 +129,7 @@ const EDGE_FRAG = /* glsl */ `
     vec3 rgb = mix(uHaloColor, uLineColor, lineCore);
     float alpha = clamp(max(lineCore, halo * uHaloAlpha), 0.0, 1.0);
     if (alpha < 0.003) discard;
-    gl_FragColor = vec4(rgb, alpha);
+    gl_FragColor = vec4(linearToSRGB(rgb), alpha);
   }
 `
 
@@ -141,7 +150,11 @@ export function createLineArtRenderer(): LineArtRenderer {
     depthBuffer: true,
     depthTexture: new THREE.DepthTexture(1, 1, THREE.UnsignedIntType),
     minFilter: THREE.NearestFilter,
-    magFilter: THREE.NearestFilter,
+    // 高dpr端末では MindAR が dpr をクランプしないため、フルスクリーンの
+    // エッジ矩形が RT テクスチャを拡大表示することがある。Nearest だと
+    // 線がジャギーになるので拡大は Linear にする(縮小は Nearest のまま。
+    // 付随する DepthTexture のフィルタはコンストラクタ側の設定を維持)。
+    magFilter: THREE.LinearFilter,
   })
 
   const normalMaterial = new THREE.MeshNormalMaterial()
@@ -165,6 +178,7 @@ export function createLineArtRenderer(): LineArtRenderer {
     uDepthThreshold: { value: DEPTH_THRESHOLD },
     uNormalThreshold: { value: NORMAL_THRESHOLD },
     uBoilAmp: { value: BOIL_AMP },
+    uBoilCells: { value: BOIL_CELLS },
   }
 
   const edgeMaterial = new THREE.ShaderMaterial({

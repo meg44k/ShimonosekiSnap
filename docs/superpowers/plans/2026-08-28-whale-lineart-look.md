@@ -1029,6 +1029,7 @@ git commit -m "feat: クジラモデルのCC-BYクレジットを案内画面に
 - 尻尾が橋に被る/大きすぎる → `WHALE_SCALE` を下げる
 - 小さくて雄大さがない → `WHALE_SCALE` を上げる(被り具合とのトレードオフ)
 - 頭が進行方向と逆/横を向く → `WHALE_BASE_ROTATION_Y` を `-Math.PI / 2` にする、または `Math.PI` 足し引きする
+- t=0 / t=1 でクジラが瞬間的に出現/消失する(pop-in / pop-out) → `WAYPOINTS` の開始・終了 Y(`whaleAnimation.ts`)と `SEA_LEVEL_Y`(`seaLevel.ts`)を一緒に調整し、t=0 と t=1 で描画されるクジラの bbox がクリップ平面より完全に下に来るようにする。これらの値は旧 `whale.glb` 用に調整されたもので、ザトウクジラは bbox が非対称のため背中がクリップ平面より上に出やすい。
 
 - [ ] **Step 5: (フォールバック)クジラが軌道を追従しない場合**
 

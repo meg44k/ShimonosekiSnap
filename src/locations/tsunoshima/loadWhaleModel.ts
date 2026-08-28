@@ -34,14 +34,18 @@ export function loadWhaleModel(): Promise<LoadedEffectModel> {
         gltf.scene.scale.setScalar(WHALE_SCALE)
         gltf.scene.rotation.set(WHALE_BASE_ROTATION_X, WHALE_BASE_ROTATION_Y, 0)
 
-        // エッジ検出は面の法線に Sobel をかけるので、ローポリの面ごとに
-        // 分かれた法線だとカクカクの線が出る。頂点を統合してスムーズな
-        // 法線を計算し直す。マテリアルは実際には ArCameraView 側の
-        // MeshNormalMaterial オーバーライドでしか描かれないが、有効な
-        // マテリアルは必要なのでフラットなものを残す。
+        // エッジ検出は面の法線に Sobel をかけるので、シェーディングの
+        // 継ぎ目で法線が割れているとそこに余計な線が出る。mergeVertices は
+        // normal 属性もハッシュに含めるため、法線が食い違う頂点は位置が
+        // 同じでも統合されない。そこで一旦 normal 属性を削除して位置だけで
+        // welding させ、その後 computeVertexNormals() で法線を計算し直す。
+        // マテリアルは実際には ArCameraView 側の MeshNormalMaterial
+        // オーバーライドでしか描かれないが、有効なマテリアルは必要なので
+        // フラットなものを残す。
         const flat = new THREE.MeshBasicMaterial({ color: 0x24495c })
         gltf.scene.traverse((child) => {
           if (child instanceof THREE.Mesh) {
+            child.geometry.deleteAttribute('normal')
             child.geometry = mergeVertices(child.geometry)
             child.geometry.computeVertexNormals()
             child.material = flat

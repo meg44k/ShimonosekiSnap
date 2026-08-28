@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useState } from 'react'
 import { getLocation } from './locations'
 import type { LocationConfig } from './locations/types'
-import { GuidancePage } from './pages/GuidancePage'
+import { GuidancePage, MODEL_CREDIT } from './pages/GuidancePage'
 import { parseRoute } from './router'
 import './App.css'
 
@@ -95,6 +95,7 @@ function App() {
             >
               カメラを起動
             </button>
+            <p className="model-credit">{MODEL_CREDIT}</p>
           </div>
         )}
 
