@@ -145,8 +145,8 @@ export async function loadKatanaModel(type: KatanaType = 'standard'): Promise<TH
     new THREE.Box3().setFromObject(innerGroup).getCenter(gripCenter)
   }
 
-  // 握り手の中心: 鍔（ツバ）のすぐ後ろ（約0.4m手元側）を原点に設定
-  const handHoldX = tsubaFound ? tsubaX - 0.45 : gripCenter.x
+  // 握り手の中心: 鍔（ツバ）の直下（約0.15m手元側）に原点を設定し、手にぴったり密着させる
+  const handHoldX = tsubaFound ? tsubaX - 0.15 : gripCenter.x
   innerGroup.position.set(-handHoldX, -gripCenter.y, -gripCenter.z)
 
   // 元のOBJはX軸方向（+Xが刃先、-Xが柄尻）なので、Z軸回りに+90度回転させて刃先を真上(+Y)にする
