@@ -35,6 +35,12 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
       uiLoading: 'no',
       uiScanning: 'no',
       uiError: 'no',
+      // マーカー追跡姿勢のOne-Euroフィルタ。静止時の小刻みな震えを抑えるため
+      // filterMinCF(最小カットオフ周波数)を既定 0.001 から下げてスムージングを強め、
+      // その分の遅延をカメラ移動時に取り戻すため filterBeta を既定 1000 から上げる。
+      // 実機の「震え」と「速い動きへの追従の遅れ」のバランスを見て調整する。
+      filterMinCF: 0.0001,
+      filterBeta: 2000,
     })
     mindarRef.current = mindarThree
     let lineArt: LineArtRenderer | null = null
