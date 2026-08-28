@@ -231,6 +231,23 @@
   object-fit: cover;
 }
 
+.person-detection-container {
+  isolation: isolate;
+}
+
+.person-camera-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.person-overlay-canvas {
+  z-index: 1;
+  pointer-events: none;
+}
+
 .ar-status-overlay {
   position: absolute;
   inset: 0;
