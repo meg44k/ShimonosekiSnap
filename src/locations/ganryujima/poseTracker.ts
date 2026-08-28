@@ -12,6 +12,17 @@ export interface HandPoseInfo {
   angle: number
   // スケール
   scale: number
+  // 把持（握り）判定 & 確信度
+  isGrasping: boolean
+  graspConfidence: number
+  // 指の前面オクルージョン用領域 (ピクセル)
+  fingerOcclusion: {
+    cx: number
+    cy: number
+    rx: number
+    ry: number
+    angle: number
+  } | null
   score: number
 }
 
@@ -127,7 +138,7 @@ const leftSmoother = new Smoother()
 /**
  * ビデオ正規化座標(0..1)から、object-fit: cover を考慮した画面ピクセル座標・Three.js座標へ変換する
  */
-function mapVideoToScreen(
+export function mapVideoToScreen(
   lm: { x: number; y: number },
   viewport: ViewportTransform,
 ): { pixelX: number; pixelY: number; threeX: number; threeY: number } {
@@ -154,7 +165,7 @@ function mapVideoToScreen(
 }
 
 /**
- * 手首・肘・指先から、手のひら（拳）の位置・構え角度・サイズを計算する
+ * 手首・肘・親指・人差し指・小指から、手のひら（拳）の位置・把持状態・構え角度・サイズ・オクルージョン領域を計算
  */
 function extractHandPose(
   shoulder: NormalizedLandmark | undefined,
@@ -162,6 +173,7 @@ function extractHandPose(
   wrist: NormalizedLandmark | undefined,
   index: NormalizedLandmark | undefined,
   pinky: NormalizedLandmark | undefined,
+  thumb: NormalizedLandmark | undefined,
   viewport: ViewportTransform,
   smoother: Smoother,
   isLeftHand: boolean,
@@ -175,42 +187,52 @@ function extractHandPose(
       pixelY: smoother.pixelY,
       angle: smoother.angle,
       scale: smoother.scale,
+      isGrasping: false,
+      graspConfidence: 0,
+      fingerOcclusion: null,
       score: 0,
     }
   }
 
-  // 手首と指先の中間地点（手のひら／拳の中心位置）を計算
+  // 1. 手首と指先の位置から手のひら（拳の中央）を計算
   let palmNorm = { x: wrist.x, y: wrist.y }
+  let graspSpread = 1.0
+
   if (index && pinky && (index.visibility === undefined || index.visibility > 0.2)) {
     const knucklesX = (index.x + pinky.x) * 0.5
     const knucklesY = (index.y + pinky.y) * 0.5
-    // 手首から拳の中央へ60%シフト
     palmNorm = {
-      x: wrist.x * 0.4 + knucklesX * 0.6,
-      y: wrist.y * 0.4 + knucklesY * 0.6,
+      x: wrist.x * 0.38 + knucklesX * 0.62,
+      y: wrist.y * 0.38 + knucklesY * 0.62,
     }
+    // 指先と手首の開き具合（把持状態判定）
+    const handSpan = Math.hypot(index.x - wrist.x, index.y - wrist.y)
+    const armSpan = Math.hypot(wrist.x - elbow.x, wrist.y - elbow.y) || 1
+    graspSpread = handSpan / armSpan
   } else if (index && (index.visibility === undefined || index.visibility > 0.2)) {
     palmNorm = {
-      x: wrist.x * 0.45 + index.x * 0.55,
-      y: wrist.y * 0.45 + index.y * 0.55,
+      x: wrist.x * 0.42 + index.x * 0.58,
+      y: wrist.y * 0.42 + index.y * 0.58,
     }
   } else {
-    // 指先が隠れている場合でも、肘から手首の延長方向（手先側）へ少しシフト
     const dirX = wrist.x - elbow.x
     const dirY = wrist.y - elbow.y
     const len = Math.hypot(dirX, dirY) || 1
     palmNorm = {
-      x: wrist.x + (dirX / len) * 0.04,
-      y: wrist.y + (dirY / len) * 0.04,
+      x: wrist.x + (dirX / len) * 0.045,
+      y: wrist.y + (dirY / len) * 0.045,
     }
   }
 
-  // 拳の中心と肘の画面座標
+  const isGrasping = graspSpread < 0.55
+  const graspConfidence = Math.max(0, Math.min(1, (0.7 - graspSpread) * 3))
+
+  // 2. 画面ピクセル座標とThree.js座標の変換
   const palmCoord = mapVideoToScreen(palmNorm, viewport)
   const elbowCoord = mapVideoToScreen(elbow, viewport)
   const wristCoord = mapVideoToScreen(wrist, viewport)
 
-  // 腕・手の方向ベクトル（肘 ➔ 拳）
+  // 3. 幾何学的角度拘束（腕ベクトル + 親指/人差し指の握りベクトル）
   let armDx = palmCoord.pixelX - elbowCoord.pixelX
   let armDy = -(palmCoord.pixelY - elbowCoord.pixelY) // Y上向き
 
@@ -218,18 +240,18 @@ function extractHandPose(
     const indexCoord = mapVideoToScreen(index, viewport)
     const handDx = indexCoord.pixelX - wristCoord.pixelX
     const handDy = -(indexCoord.pixelY - wristCoord.pixelY)
-    armDx = armDx * 0.3 + handDx * 0.7
-    armDy = armDy * 0.3 + handDy * 0.7
+    // 拳の向き（親指・人差し指側）の寄与を強くして手首のひねりに追従
+    armDx = armDx * 0.25 + handDx * 0.75
+    armDy = armDy * 0.25 + handDy * 0.75
   }
 
-  // 刀の回転角（上向き基準からの回転）
   const armAngle = Math.atan2(armDy, armDx)
-  const angleOffset = isLeftHand ? -Math.PI * 0.05 : Math.PI * 0.05
+  const angleOffset = isLeftHand ? -Math.PI * 0.04 : Math.PI * 0.04
   const targetAngle = armAngle - Math.PI / 2 + angleOffset
 
-  // 画面上での腕の長さ（ピクセル）に基づく刀のスケール
+  // 4. スケール
   const armLenPx = Math.hypot(wristCoord.pixelX - elbowCoord.pixelX, wristCoord.pixelY - elbowCoord.pixelY)
-  const targetScale = Math.max(0.4, Math.min(2.0, armLenPx / (viewport.containerHeight * 0.22)))
+  const targetScale = Math.max(0.45, Math.min(2.0, armLenPx / (viewport.containerHeight * 0.22)))
 
   smoother.update(
     palmCoord.threeX,
@@ -240,6 +262,16 @@ function extractHandPose(
     targetScale,
   )
 
+  // 5. 指の前面オクルージョン領域（柄を握り込む指のマスク楕円）
+  const fingerRadiusPx = Math.max(16, Math.min(50, armLenPx * 0.16))
+  const fingerOcclusion = {
+    cx: smoother.pixelX,
+    cy: smoother.pixelY,
+    rx: fingerRadiusPx * 1.1,
+    ry: fingerRadiusPx * 0.85,
+    angle: smoother.angle,
+  }
+
   return {
     detected: true,
     threeX: smoother.threeX,
@@ -248,6 +280,9 @@ function extractHandPose(
     pixelY: smoother.pixelY,
     angle: smoother.angle,
     scale: smoother.scale,
+    isGrasping,
+    graspConfidence,
+    fingerOcclusion,
     score: wrist.visibility ?? 0.8,
   }
 }
@@ -280,6 +315,9 @@ export function estimateHandPoses(
       pixelY: viewport.containerHeight * 0.65,
       angle: -Math.PI / 6,
       scale: 1.0,
+      isGrasping: false,
+      graspConfidence: 0,
+      fingerOcclusion: null,
       score: 0,
     },
     leftHand: {
@@ -290,6 +328,9 @@ export function estimateHandPoses(
       pixelY: viewport.containerHeight * 0.65,
       angle: Math.PI / 6,
       scale: 1.0,
+      isGrasping: false,
+      graspConfidence: 0,
+      fingerOcclusion: null,
       score: 0,
     },
     hasPerson: false,
@@ -311,6 +352,7 @@ export function estimateHandPoses(
     // 15: left_wrist, 16: right_wrist
     // 17: left_pinky, 18: right_pinky
     // 19: left_index, 20: right_index
+    // 21: left_thumb, 22: right_thumb
     const leftShoulder = landmarks[11]
     const rightShoulder = landmarks[12]
     const leftElbow = landmarks[13]
@@ -321,16 +363,18 @@ export function estimateHandPoses(
     const rightPinky = landmarks[18]
     const leftIndex = landmarks[19]
     const rightIndex = landmarks[20]
+    const leftThumb = landmarks[21]
+    const rightThumb = landmarks[22]
 
     const screenRightIsAnatomicalRight = !isMirror
 
     const rightHand = screenRightIsAnatomicalRight
-      ? extractHandPose(rightShoulder, rightElbow, rightWrist, rightIndex, rightPinky, viewport, rightSmoother, false)
-      : extractHandPose(leftShoulder, leftElbow, leftWrist, leftIndex, leftPinky, viewport, rightSmoother, false)
+      ? extractHandPose(rightShoulder, rightElbow, rightWrist, rightIndex, rightPinky, rightThumb, viewport, rightSmoother, false)
+      : extractHandPose(leftShoulder, leftElbow, leftWrist, leftIndex, leftPinky, leftThumb, viewport, rightSmoother, false)
 
     const leftHand = screenRightIsAnatomicalRight
-      ? extractHandPose(leftShoulder, leftElbow, leftWrist, leftIndex, leftPinky, viewport, leftSmoother, true)
-      : extractHandPose(rightShoulder, rightElbow, rightWrist, rightIndex, rightPinky, viewport, leftSmoother, true)
+      ? extractHandPose(leftShoulder, leftElbow, leftWrist, leftIndex, leftPinky, leftThumb, viewport, leftSmoother, true)
+      : extractHandPose(rightShoulder, rightElbow, rightWrist, rightIndex, rightPinky, rightThumb, viewport, leftSmoother, true)
 
     return {
       rightHand,
