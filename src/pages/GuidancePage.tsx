@@ -1,5 +1,9 @@
 import { listLocations } from '../locations'
 
+// モデルの帰属表示(CC-BY-4.0、文言は改変不可)
+export const MODEL_CREDIT =
+  'This work is based on "Humpback Whale (Swimming)" (https://sketchfab.com/3d-models/humpback-whale-swimming-f4912be9163a4f45b2480df8ccb8b2c6) by Connlan_Immure (https://sketchfab.com/Connlan_Immure) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)'
+
 export function GuidancePage() {
   const locations = listLocations()
 
@@ -19,6 +23,7 @@ export function GuidancePage() {
           </ul>
         </div>
       )}
+      <p className="model-credit">{MODEL_CREDIT}</p>
     </div>
   )
 }

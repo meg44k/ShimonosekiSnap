@@ -300,3 +300,14 @@
   display: flex;
   gap: 12px;
 }
+
+.model-credit {
+  margin-top: 24px;
+  max-width: 480px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: rgba(0, 0, 0, 0.45);
+  word-break: break-all;
+  text-align: center;
+}
+
