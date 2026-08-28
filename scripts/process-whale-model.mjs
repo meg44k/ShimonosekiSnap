@@ -8,7 +8,6 @@
 //
 // Usage: node scripts/process-whale-model.mjs
 //
-// Attribution:
 // This work is based on "Humpback Whale (Swimming)"
 // (https://sketchfab.com/3d-models/humpback-whale-swimming-f4912be9163a4f45b2480df8ccb8b2c6)
 // by Connlan_Immure (https://sketchfab.com/Connlan_Immure)
