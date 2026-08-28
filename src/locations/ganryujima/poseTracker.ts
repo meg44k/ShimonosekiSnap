@@ -2,7 +2,7 @@ import { FilesetResolver, PoseLandmarker, type NormalizedLandmark } from '@media
 
 export interface HandPoseInfo {
   detected: boolean
-  // Three.js 正射影座標系 (-screenAspect 〜 screenAspect, -1.0 〜 1.0)
+  // Three.js 正射影座標系 (-aspect 〜 aspect, -1.0 〜 1.0)
   threeX: number
   threeY: number
   // 画面ピクセル座標
@@ -24,22 +24,14 @@ export interface PoseTrackingResult {
   hasPerson: boolean
 }
 
-export interface ViewportTransform {
-  videoWidth: number
-  videoHeight: number
-  containerWidth: number
-  containerHeight: number
-  isMirror: boolean
-}
+let imageLandmarkerInstance: PoseLandmarker | null = null
+let initImagePromise: Promise<PoseLandmarker | null> | null = null
 
-let poseLandmarkerInstance: PoseLandmarker | null = null
-let initPromise: Promise<PoseLandmarker | null> | null = null
+export async function getImagePoseLandmarker(): Promise<PoseLandmarker | null> {
+  if (imageLandmarkerInstance) return imageLandmarkerInstance
+  if (initImagePromise) return initImagePromise
 
-export async function getPoseLandmarker(): Promise<PoseLandmarker | null> {
-  if (poseLandmarkerInstance) return poseLandmarkerInstance
-  if (initPromise) return initPromise
-
-  initPromise = (async () => {
+  initImagePromise = (async () => {
     try {
       const vision = await FilesetResolver.forVisionTasks(
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm',
@@ -54,13 +46,13 @@ export async function getPoseLandmarker(): Promise<PoseLandmarker | null> {
             modelAssetPath: modelUrl,
             delegate: 'GPU',
           },
-          runningMode: 'VIDEO',
+          runningMode: 'IMAGE',
           numPoses: 1,
-          minPoseDetectionConfidence: 0.35,
-          minPosePresenceConfidence: 0.35,
-          minTrackingConfidence: 0.35,
+          minPoseDetectionConfidence: 0.3,
+          minPosePresenceConfidence: 0.3,
+          minTrackingConfidence: 0.3,
         })
-        poseLandmarkerInstance = landmarker
+        imageLandmarkerInstance = landmarker
         return landmarker
       } catch (gpuError) {
         console.warn('[poseTracker] GPU delegate failed, falling back to CPU:', gpuError)
@@ -69,13 +61,13 @@ export async function getPoseLandmarker(): Promise<PoseLandmarker | null> {
             modelAssetPath: modelUrl,
             delegate: 'CPU',
           },
-          runningMode: 'VIDEO',
+          runningMode: 'IMAGE',
           numPoses: 1,
-          minPoseDetectionConfidence: 0.35,
-          minPosePresenceConfidence: 0.35,
-          minTrackingConfidence: 0.35,
+          minPoseDetectionConfidence: 0.3,
+          minPosePresenceConfidence: 0.3,
+          minTrackingConfidence: 0.3,
         })
-        poseLandmarkerInstance = landmarker
+        imageLandmarkerInstance = landmarker
         return landmarker
       }
     } catch (err) {
@@ -84,125 +76,58 @@ export async function getPoseLandmarker(): Promise<PoseLandmarker | null> {
     }
   })()
 
-  return initPromise
-}
-
-// ジッター抑制用スムージング係数
-const SMOOTH_ALPHA = 0.55
-
-class Smoother {
-  threeX = 0
-  threeY = 0
-  pixelX = 0
-  pixelY = 0
-  angle = 0
-  scale = 1.0
-  initialized = false
-
-  update(threeX: number, threeY: number, pixelX: number, pixelY: number, targetAngle: number, targetScale: number) {
-    if (!this.initialized) {
-      this.threeX = threeX
-      this.threeY = threeY
-      this.pixelX = pixelX
-      this.pixelY = pixelY
-      this.angle = targetAngle
-      this.scale = targetScale
-      this.initialized = true
-      return
-    }
-
-    this.threeX = this.threeX * (1 - SMOOTH_ALPHA) + threeX * SMOOTH_ALPHA
-    this.threeY = this.threeY * (1 - SMOOTH_ALPHA) + threeY * SMOOTH_ALPHA
-    this.pixelX = this.pixelX * (1 - SMOOTH_ALPHA) + pixelX * SMOOTH_ALPHA
-    this.pixelY = this.pixelY * (1 - SMOOTH_ALPHA) + pixelY * SMOOTH_ALPHA
-    this.scale = this.scale * (1 - SMOOTH_ALPHA) + targetScale * SMOOTH_ALPHA
-
-    let diff = targetAngle - this.angle
-    while (diff < -Math.PI) diff += Math.PI * 2
-    while (diff > Math.PI) diff -= Math.PI * 2
-    this.angle += diff * SMOOTH_ALPHA
-  }
-}
-
-const rightSmoother = new Smoother()
-const leftSmoother = new Smoother()
-
-/**
- * ビデオ正規化座標(0..1)から、object-fit: cover を考慮した画面ピクセル座標・Three.js座標へ変換する
- */
-export function mapVideoToScreen(
-  lm: { x: number; y: number },
-  viewport: ViewportTransform,
-): { pixelX: number; pixelY: number; threeX: number; threeY: number } {
-  const { videoWidth, videoHeight, containerWidth, containerHeight, isMirror } = viewport
-
-  const scale = Math.max(containerWidth / videoWidth, containerHeight / videoHeight)
-  const renderedW = videoWidth * scale
-  const renderedH = videoHeight * scale
-  const offsetX = (containerWidth - renderedW) / 2
-  const offsetY = (containerHeight - renderedH) / 2
-
-  let pixelX = lm.x * renderedW + offsetX
-  const pixelY = lm.y * renderedH + offsetY
-
-  if (isMirror) {
-    pixelX = containerWidth - pixelX
-  }
-
-  const screenAspect = containerWidth / containerHeight
-  const threeX = (pixelX / containerWidth * 2 - 1) * screenAspect
-  const threeY = -((pixelY / containerHeight) * 2 - 1)
-
-  return { pixelX, pixelY, threeX, threeY }
+  return initImagePromise
 }
 
 /**
- * 手首・肘・親指・人差し指・小指から、手に対して垂直に刀を立てる角度・位置・サイズを計算
+ * 手首・肘・指先のランドマークから、手に対して垂直に刀を立てる構えを計算
  */
-function extractHandPose(
+function extractHandPoseFromLandmarks(
   shoulder: NormalizedLandmark | undefined,
   elbow: NormalizedLandmark | undefined,
   wrist: NormalizedLandmark | undefined,
   index: NormalizedLandmark | undefined,
   pinky: NormalizedLandmark | undefined,
   thumb: NormalizedLandmark | undefined,
-  viewport: ViewportTransform,
-  smoother: Smoother,
+  imageWidth: number,
+  imageHeight: number,
   isLeftHand: boolean,
 ): HandPoseInfo {
-  if (!wrist || !elbow || (wrist.visibility !== undefined && wrist.visibility < 0.25)) {
+  const aspect = imageWidth / imageHeight
+
+  if (!wrist || !elbow || (wrist.visibility !== undefined && wrist.visibility < 0.2)) {
     return {
       detected: false,
-      threeX: smoother.threeX,
-      threeY: smoother.threeY,
-      pixelX: smoother.pixelX,
-      pixelY: smoother.pixelY,
-      angle: smoother.angle,
-      scale: smoother.scale,
+      threeX: isLeftHand ? -aspect * 0.4 : aspect * 0.4,
+      threeY: -0.25,
+      pixelX: isLeftHand ? imageWidth * 0.3 : imageWidth * 0.7,
+      pixelY: imageHeight * 0.65,
+      angle: isLeftHand ? -Math.PI / 12 : Math.PI / 12,
+      scale: 1.0,
       isGrasping: false,
       graspConfidence: 0,
       score: 0,
     }
   }
 
-  // 1. 手首と指先（拳）の位置を計算
+  // 1. 手首と指先から拳（手のひら中央）の位置を計算
   let palmNorm = { x: wrist.x, y: wrist.y }
   let graspSpread = 1.0
 
-  if (index && pinky && (index.visibility === undefined || index.visibility > 0.2)) {
+  if (index && pinky && (index.visibility === undefined || index.visibility > 0.15)) {
     const knucklesX = (index.x + pinky.x) * 0.5
     const knucklesY = (index.y + pinky.y) * 0.5
     palmNorm = {
-      x: wrist.x * 0.4 + knucklesX * 0.6,
-      y: wrist.y * 0.4 + knucklesY * 0.6,
+      x: wrist.x * 0.38 + knucklesX * 0.62,
+      y: wrist.y * 0.38 + knucklesY * 0.62,
     }
     const handSpan = Math.hypot(index.x - wrist.x, index.y - wrist.y)
     const armSpan = Math.hypot(wrist.x - elbow.x, wrist.y - elbow.y) || 1
     graspSpread = handSpan / armSpan
-  } else if (index && (index.visibility === undefined || index.visibility > 0.2)) {
+  } else if (index && (index.visibility === undefined || index.visibility > 0.15)) {
     palmNorm = {
-      x: wrist.x * 0.45 + index.x * 0.55,
-      y: wrist.y * 0.45 + index.y * 0.55,
+      x: wrist.x * 0.42 + index.x * 0.58,
+      y: wrist.y * 0.42 + index.y * 0.58,
     }
   } else {
     const dirX = wrist.x - elbow.x
@@ -214,100 +139,87 @@ function extractHandPose(
     }
   }
 
-  const isGrasping = graspSpread < 0.55
-  const graspConfidence = Math.max(0, Math.min(1, (0.7 - graspSpread) * 3))
+  const isGrasping = graspSpread < 0.6
+  const graspConfidence = Math.max(0, Math.min(1, (0.75 - graspSpread) * 3))
 
-  // 2. 画面ピクセル座標とThree.js座標の変換
-  const palmCoord = mapVideoToScreen(palmNorm, viewport)
-  const elbowCoord = mapVideoToScreen(elbow, viewport)
-  const wristCoord = mapVideoToScreen(wrist, viewport)
+  // 2. 画像ピクセル座標と Three.js 正射影座標系への変換
+  const pixelX = palmNorm.x * imageWidth
+  const pixelY = palmNorm.y * imageHeight
+  const threeX = (palmNorm.x * 2 - 1) * aspect
+  const threeY = -(palmNorm.y * 2 - 1)
 
-  // 3. 腕・手のベクトル（肘 ➔ 拳）
-  let armDx = palmCoord.pixelX - elbowCoord.pixelX
-  let armDy = -(palmCoord.pixelY - elbowCoord.pixelY) // Y上向き
+  const elbowPixelX = elbow.x * imageWidth
+  const elbowPixelY = elbow.y * imageHeight
 
-  if (index && (index.visibility === undefined || index.visibility > 0.2)) {
-    const indexCoord = mapVideoToScreen(index, viewport)
-    const handDx = indexCoord.pixelX - wristCoord.pixelX
-    const handDy = -(indexCoord.pixelY - wristCoord.pixelY)
+  // 3. 腕・手の方向ベクトル（肘 ➔ 拳）
+  let armDx = pixelX - elbowPixelX
+  let armDy = -(pixelY - elbowPixelY) // Y上向き
+
+  if (index && (index.visibility === undefined || index.visibility > 0.15)) {
+    const indexPixelX = index.x * imageWidth
+    const indexPixelY = index.y * imageHeight
+    const wristPixelX = wrist.x * imageWidth
+    const wristPixelY = wrist.y * imageHeight
+    const handDx = indexPixelX - wristPixelX
+    const handDy = -(indexPixelY - wristPixelY)
     armDx = armDx * 0.3 + handDx * 0.7
     armDy = armDy * 0.3 + handDy * 0.7
   }
 
-  // 腕の進行方向（ラジアン）
+  // 腕の方向
   const armAngle = Math.atan2(armDy, armDx)
 
-  // 刀を「手・腕に対して垂直（90度立てる）」に向ける角度計算:
-  // 刀の基準モデルは真上(+Y, 90度)を向いている。
-  // 腕の方向に対して垂直に刀を立てるため、腕の向きから90度直角方向に回転させる
+  // 刀を「手・腕に対して垂直に立てる」角度計算
   let targetAngle: number
   if (isLeftHand) {
-    // 左手: 腕の外側/上向きに垂直に立てる
     targetAngle = armDx < 0 ? armAngle - Math.PI / 2 : armAngle + Math.PI / 2
   } else {
-    // 右手: 腕の外側/上向きに垂直に立てる
     targetAngle = armDx > 0 ? armAngle + Math.PI / 2 : armAngle - Math.PI / 2
   }
 
-  // 上向きの自然な傾き（常に空を向く方向へ補正）
   if (Math.cos(targetAngle) < -0.3 && armDy > 0) {
     targetAngle = armAngle + (isLeftHand ? -Math.PI / 2 : Math.PI / 2)
   }
 
-  // 4. スケール
-  const armLenPx = Math.hypot(wristCoord.pixelX - elbowCoord.pixelX, wristCoord.pixelY - elbowCoord.pixelY)
-  const targetScale = Math.max(0.45, Math.min(2.0, armLenPx / (viewport.containerHeight * 0.22)))
-
-  smoother.update(
-    palmCoord.threeX,
-    palmCoord.threeY,
-    palmCoord.pixelX,
-    palmCoord.pixelY,
-    targetAngle,
-    targetScale,
-  )
+  // 4. スケール（腕の長さに比例）
+  const wristPixelX = wrist.x * imageWidth
+  const wristPixelY = wrist.y * imageHeight
+  const armLenPx = Math.hypot(wristPixelX - elbowPixelX, wristPixelY - elbowPixelY)
+  const targetScale = Math.max(0.45, Math.min(2.2, armLenPx / (imageHeight * 0.22)))
 
   return {
     detected: true,
-    threeX: smoother.threeX,
-    threeY: smoother.threeY,
-    pixelX: smoother.pixelX,
-    pixelY: smoother.pixelY,
-    angle: smoother.angle,
-    scale: smoother.scale,
+    threeX,
+    threeY,
+    pixelX,
+    pixelY,
+    angle: targetAngle,
+    scale: targetScale,
     isGrasping,
     graspConfidence,
-    score: wrist.visibility ?? 0.8,
+    score: wrist.visibility ?? 0.85,
   }
 }
 
 /**
- * ビデオフレームから人物の手の姿勢を抽出する
+ * 撮影した写真（静止画 Canvas / Image）から人物の手の姿勢を検出する
  */
-export function estimateHandPoses(
-  landmarker: PoseLandmarker | null,
-  video: HTMLVideoElement,
-  container: HTMLElement,
-  isMirror: boolean,
-  timestampMs: number,
-): PoseTrackingResult {
-  const containerRect = container.getBoundingClientRect()
-  const viewport: ViewportTransform = {
-    videoWidth: video.videoWidth || 640,
-    videoHeight: video.videoHeight || 480,
-    containerWidth: containerRect.width || window.innerWidth,
-    containerHeight: containerRect.height || window.innerHeight,
-    isMirror,
-  }
+export async function detectPoseOnImage(
+  imageSource: HTMLCanvasElement | HTMLImageElement | ImageData,
+  width: number,
+  height: number,
+): Promise<PoseTrackingResult> {
+  const landmarker = await getImagePoseLandmarker()
+  const aspect = width / height
 
   const defaultResult: PoseTrackingResult = {
     rightHand: {
       detected: false,
-      threeX: (viewport.containerWidth / viewport.containerHeight) * 0.45,
+      threeX: aspect * 0.45,
       threeY: -0.25,
-      pixelX: viewport.containerWidth * 0.7,
-      pixelY: viewport.containerHeight * 0.65,
-      angle: Math.PI / 12, // 自然な立て構え
+      pixelX: width * 0.7,
+      pixelY: height * 0.65,
+      angle: Math.PI / 12,
       scale: 1.0,
       isGrasping: false,
       graspConfidence: 0,
@@ -315,10 +227,10 @@ export function estimateHandPoses(
     },
     leftHand: {
       detected: false,
-      threeX: -(viewport.containerWidth / viewport.containerHeight) * 0.45,
+      threeX: -aspect * 0.45,
       threeY: -0.25,
-      pixelX: viewport.containerWidth * 0.3,
-      pixelY: viewport.containerHeight * 0.65,
+      pixelX: width * 0.3,
+      pixelY: height * 0.65,
       angle: -Math.PI / 12,
       scale: 1.0,
       isGrasping: false,
@@ -328,23 +240,17 @@ export function estimateHandPoses(
     hasPerson: false,
   }
 
-  if (!landmarker || viewport.videoWidth === 0 || viewport.videoHeight === 0) {
+  if (!landmarker) {
     return defaultResult
   }
 
   try {
-    const result = landmarker.detectForVideo(video, timestampMs)
+    const result = landmarker.detect(imageSource)
     if (!result.landmarks || result.landmarks.length === 0) {
       return defaultResult
     }
 
     const landmarks = result.landmarks[0]
-    // 11: left_shoulder, 12: right_shoulder
-    // 13: left_elbow, 14: right_elbow
-    // 15: left_wrist, 16: right_wrist
-    // 17: left_pinky, 18: right_pinky
-    // 19: left_index, 20: right_index
-    // 21: left_thumb, 22: right_thumb
     const leftShoulder = landmarks[11]
     const rightShoulder = landmarks[12]
     const leftElbow = landmarks[13]
@@ -358,15 +264,29 @@ export function estimateHandPoses(
     const leftThumb = landmarks[21]
     const rightThumb = landmarks[22]
 
-    const screenRightIsAnatomicalRight = !isMirror
+    const rightHand = extractHandPoseFromLandmarks(
+      rightShoulder,
+      rightElbow,
+      rightWrist,
+      rightIndex,
+      rightPinky,
+      rightThumb,
+      width,
+      height,
+      false,
+    )
 
-    const rightHand = screenRightIsAnatomicalRight
-      ? extractHandPose(rightShoulder, rightElbow, rightWrist, rightIndex, rightPinky, rightThumb, viewport, rightSmoother, false)
-      : extractHandPose(leftShoulder, leftElbow, leftWrist, leftIndex, leftPinky, leftThumb, viewport, rightSmoother, false)
-
-    const leftHand = screenRightIsAnatomicalRight
-      ? extractHandPose(leftShoulder, leftElbow, leftWrist, leftIndex, leftPinky, leftThumb, viewport, leftSmoother, true)
-      : extractHandPose(rightShoulder, rightElbow, rightWrist, rightIndex, rightPinky, rightThumb, viewport, leftSmoother, true)
+    const leftHand = extractHandPoseFromLandmarks(
+      leftShoulder,
+      leftElbow,
+      leftWrist,
+      leftIndex,
+      leftPinky,
+      leftThumb,
+      width,
+      height,
+      true,
+    )
 
     return {
       rightHand,
@@ -374,7 +294,7 @@ export function estimateHandPoses(
       hasPerson: rightHand.detected || leftHand.detected,
     }
   } catch (err) {
-    console.warn('[poseTracker] Error detecting pose:', err)
+    console.error('[poseTracker] Error detecting pose on image:', err)
     return defaultResult
   }
 }
