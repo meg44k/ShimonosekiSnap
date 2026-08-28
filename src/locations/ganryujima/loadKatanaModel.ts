@@ -2,74 +2,160 @@ import * as THREE from 'three'
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js'
 import katanaObjUrl from './katanas.obj?url'
 
-const loader = new OBJLoader()
+export type KatanaType = 'standard' | 'nodachi' | 'wakizashi' | 'long' | 'shirasaya'
 
-/**
- * 刀3Dモデルを読み込み、グリップ（柄の握り手位置）を原点(0,0,0)に揃えた3Dグループを生成する
- */
-export function loadKatanaModel(): Promise<THREE.Group> {
-  return new Promise((resolve, reject) => {
+// 各刀を構成するOBJオブジェクト名のマッピング
+const KATANA_PARTS: Record<KatanaType, string[]> = {
+  // 1. 宮本武蔵の打刀（基本）
+  standard: ['handgrip1', 'tsuba', 'blade_base', 'blade', 'handgrip2'],
+  // 2. 佐々木小次郎の物干し竿（大太刀）
+  nodachi: [
+    'handgrip2.004_handgrip2.006',
+    'blade.004_blade.006',
+    'blade_base.004_blade_base.006',
+    'tsuba.004_tsuba.006',
+    'handgrip1.004_handgrip1.006',
+  ],
+  // 3. 脇差（小太刀・二刀流用）
+  wakizashi: ['handgrip2.001', 'blade.001', 'blade_base.001', 'tsuba.001', 'handgrip1.001'],
+  // 4. 長刀
+  long: [
+    'handgrip1.003_handgrip1.005',
+    'tsuba.003_tsuba.005',
+    'blade_base.003_blade_base.005',
+    'blade.003_blade.005',
+    'handgrip2.003_handgrip2.005',
+  ],
+  // 5. 白鞘・別鍔
+  shirasaya: [
+    'handgrip2.002_handgrip2.004',
+    'blade.002_blade.004',
+    'blade_base.002_blade_base.004',
+    'tsuba.002_tsuba.004',
+    'handgrip1.002_handgrip1.004',
+  ],
+}
+
+// OBJ全体のキャッシュ
+let cachedRawObj: THREE.Group | null = null
+let loadPromise: Promise<THREE.Group> | null = null
+
+function fetchRawObj(): Promise<THREE.Group> {
+  if (cachedRawObj) return Promise.resolve(cachedRawObj)
+  if (loadPromise) return loadPromise
+
+  const loader = new OBJLoader()
+  loadPromise = new Promise((resolve, reject) => {
     loader.load(
       katanaObjUrl,
       (obj) => {
-        const rootGroup = new THREE.Group()
-
-        // 金属質・光沢感のある高品質マテリアルの設定
-        const bladeMaterial = new THREE.MeshStandardMaterial({
-          color: 0xcccccc,
-          metalness: 0.95,
-          roughness: 0.15,
-          envMapIntensity: 1.2,
-        })
-
-        const tsubaMaterial = new THREE.MeshStandardMaterial({
-          color: 0xd4af37, // 金色 (Dark Gold)
-          metalness: 0.85,
-          roughness: 0.3,
-        })
-
-        const gripMaterial = new THREE.MeshStandardMaterial({
-          color: 0x1f1f1f, // 黒色 (柄巻き)
-          metalness: 0.1,
-          roughness: 0.8,
-        })
-
-        // 各パーツにマテリアルを適用
-        obj.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            const name = child.name.toLowerCase()
-            if (name.includes('blade') || name.includes('blade_base')) {
-              child.material = bladeMaterial
-            } else if (name.includes('tsuba')) {
-              child.material = tsubaMaterial
-            } else if (name.includes('handgrip')) {
-              child.material = gripMaterial
-            } else {
-              child.material = bladeMaterial
-            }
-            child.castShadow = true
-            child.receiveShadow = true
-          }
-        })
-
-        // モデル全体のバウンディングボックスを計算
-        const box = new THREE.Box3().setFromObject(obj)
-        const size = new THREE.Vector3()
-        box.getSize(size)
-
-        // 刀の柄（グリップ）付近を原点(0,0,0)にするためのオフセット調整
-        // katanas.obj は X軸方向に伸びているため、柄端を原点に揃える
-        obj.position.set(-box.min.x - 0.2, -box.min.y - size.y * 0.5, -box.min.z - size.z * 0.5)
-
-        // 基準スケール（持ちやすいサイズに正規化: 全長約 0.9〜1.0m 相当）
-        const normalizedScale = 0.25 / Math.max(size.x, size.y, size.z)
-        obj.scale.setScalar(normalizedScale)
-
-        rootGroup.add(obj)
-        resolve(rootGroup)
+        cachedRawObj = obj
+        resolve(obj)
       },
       undefined,
-      (error) => reject(error instanceof Error ? error : new Error(String(error))),
+      (err) => reject(err instanceof Error ? err : new Error(String(err))),
     )
   })
+
+  return loadPromise
+}
+
+/**
+ * 指定した種類の刀を抽出し、柄（グリップ握り手）を原点(0,0,0)・刃先を上向き(+Y)に整えたThree.jsグループを返す
+ */
+export async function loadKatanaModel(type: KatanaType = 'standard'): Promise<THREE.Group> {
+  const rawObj = await fetchRawObj()
+  const partNames = KATANA_PARTS[type] || KATANA_PARTS.standard
+
+  const katanaGroup = new THREE.Group()
+
+  // 高品質マテリアル
+  const bladeMaterial = new THREE.MeshStandardMaterial({
+    color: 0xe8e8e8,
+    metalness: 0.95,
+    roughness: 0.15,
+    envMapIntensity: 1.5,
+  })
+
+  const tsubaMaterial = new THREE.MeshStandardMaterial({
+    color: 0xd4af37, // 金色
+    metalness: 0.9,
+    roughness: 0.25,
+  })
+
+  const gripMaterial = new THREE.MeshStandardMaterial({
+    color: 0x1a1a1a, // 深みのある黒（柄巻）
+    metalness: 0.1,
+    roughness: 0.85,
+  })
+
+  // 指定された刀のパーツのみを抽出
+  const extractedMeshes: THREE.Mesh[] = []
+  rawObj.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      if (partNames.includes(child.name)) {
+        const clonedMesh = child.clone(true)
+        const name = child.name.toLowerCase()
+
+        if (name.includes('blade') || name.includes('blade_base')) {
+          clonedMesh.material = bladeMaterial
+        } else if (name.includes('tsuba')) {
+          clonedMesh.material = tsubaMaterial
+        } else if (name.includes('handgrip')) {
+          clonedMesh.material = gripMaterial
+        } else {
+          clonedMesh.material = bladeMaterial
+        }
+
+        extractedMeshes.push(clonedMesh)
+      }
+    }
+  })
+
+  if (extractedMeshes.length === 0) {
+    throw new Error(`刀パーツの抽出に失敗しました (type: ${type})`)
+  }
+
+  const innerGroup = new THREE.Group()
+  for (const mesh of extractedMeshes) {
+    innerGroup.add(mesh)
+  }
+
+  // グリップの中心座標を計算
+  const gripBox = new THREE.Box3()
+  for (const mesh of extractedMeshes) {
+    if (mesh.name.toLowerCase().includes('handgrip')) {
+      gripBox.expandByObject(mesh)
+    }
+  }
+
+  const gripCenter = new THREE.Vector3()
+  if (!gripBox.isEmpty()) {
+    gripBox.getCenter(gripCenter)
+  } else {
+    new THREE.Box3().setFromObject(innerGroup).getCenter(gripCenter)
+  }
+
+  // 柄の握り手を原点(0,0,0)にシフト
+  innerGroup.position.set(-gripCenter.x, -gripCenter.y, -gripCenter.z)
+
+  // 元のOBJはX軸方向に伸びているため、Z軸回りに90度回転させて刃先を上向き(+Y)にする
+  // これにより、手の向きに合わせて回転させやすくなる
+  const orientedContainer = new THREE.Group()
+  orientedContainer.add(innerGroup)
+  orientedContainer.rotation.z = Math.PI / 2 // +X方向 ➔ +Y方向（上向き）
+
+  // スケール調整（画面上で見栄えのよいサイズ: 全長約0.9〜1.1m相当）
+  const totalBox = new THREE.Box3().setFromObject(orientedContainer)
+  const totalSize = new THREE.Vector3()
+  totalBox.getSize(totalSize)
+
+  const baseHeight = type === 'nodachi' ? 1.4 : type === 'wakizashi' ? 0.75 : 1.05
+  const scale = baseHeight / Math.max(totalSize.x, totalSize.y, totalSize.z)
+  orientedContainer.scale.setScalar(scale)
+
+  katanaGroup.add(orientedContainer)
+  katanaGroup.name = `katana_${type}`
+
+  return katanaGroup
 }

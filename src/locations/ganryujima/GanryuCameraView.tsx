@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import * as THREE from 'three'
 import { captureComposite } from '../../features/ar/captureComposite'
 import type { LocationConfig } from '../types'
-import { loadKatanaModel } from './loadKatanaModel'
+import { loadKatanaModel, type KatanaType } from './loadKatanaModel'
 import { getPoseLandmarker, estimateHandPoses } from './poseTracker'
 import type { PoseLandmarker } from '@mediapipe/tasks-vision'
 
@@ -27,6 +27,7 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
   const [poseDetected, setPoseDetected] = useState<boolean>(false)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
   const [stanceMode, setStanceMode] = useState<StanceMode>('auto')
+  const [katanaType, setKatanaType] = useState<KatanaType>('standard')
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -38,10 +39,11 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
   const startCamera = useCallback(async (facing: 'user' | 'environment') => {
     try {
       stopCamera()
-      // 端末の仕様に柔軟に適合するカメラ制約
       const constraints: MediaStreamConstraints = {
         video: {
           facingMode: { ideal: facing },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
         audio: false,
       }
@@ -53,12 +55,10 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
       if (video) {
         video.srcObject = stream
         video.onloadedmetadata = () => {
-          video.play().then(() => {
-            setCameraReady(true)
-          }).catch((e) => {
-            console.warn('[GanryuCameraView] Video play warning:', e)
-            setCameraReady(true)
-          })
+          video
+            .play()
+            .then(() => setCameraReady(true))
+            .catch(() => setCameraReady(true))
         }
       }
       return stream
@@ -74,13 +74,14 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
     let animationFrameId: number
     let landmarkerInstance: PoseLandmarker | null = null
 
-    // 1) カメラをまず起動
+    // 1) カメラ起動
     startCamera(facingMode)
 
-    // 2) Three.js シーンとレンダラーの初期化
+    // 2) Three.js シーンと正射影カメラ
     const scene = new THREE.Scene()
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100)
-    camera.position.z = 10
+    camera.position.set(0, 0, 10)
+    camera.lookAt(0, 0, 0)
 
     const renderer = new THREE.WebGLRenderer({
       canvas: canvasRef.current || undefined,
@@ -92,47 +93,64 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
     renderer.setSize(window.innerWidth, window.innerHeight)
 
     // ライティング
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.3)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.5)
     scene.add(ambientLight)
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 2.2)
-    dirLight1.position.set(5, 10, 7)
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2)
+    hemiLight.position.set(0, 20, 0)
+    scene.add(hemiLight)
+
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 2.0)
+    dirLight1.position.set(5, 10, 8)
     scene.add(dirLight1)
 
-    const dirLight2 = new THREE.DirectionalLight(0xd4af37, 1.2)
-    dirLight2.position.set(-5, -5, 5)
+    const dirLight2 = new THREE.DirectionalLight(0xd4af37, 1.0)
+    dirLight2.position.set(-5, 5, -5)
     scene.add(dirLight2)
 
-    // 右手用・左手用の刀モデルグループ
+    // 右手・左手用の刀グループ
     const rightKatanaGroup = new THREE.Group()
     const leftKatanaGroup = new THREE.Group()
-    rightKatanaGroup.visible = false
-    leftKatanaGroup.visible = false
     scene.add(rightKatanaGroup)
     scene.add(leftKatanaGroup)
 
-    // 3) 刀モデルとMediaPipeをバックグラウンドで非同期読み込み
-    Promise.allSettled([loadKatanaModel(), getPoseLandmarker()]).then((results) => {
+    // 3) 選択された刀モデルのロード
+    const isDual = stanceMode === 'dual'
+    const rightType = isDual ? 'standard' : katanaType
+    const leftType = isDual ? 'wakizashi' : katanaType
+
+    Promise.allSettled([
+      loadKatanaModel(rightType),
+      loadKatanaModel(leftType),
+      getPoseLandmarker(),
+    ]).then((results) => {
       if (cancelled) return
 
-      const modelResult = results[0]
-      const landmarkerResult = results[1]
+      const rightResult = results[0]
+      const leftResult = results[1]
+      const landmarkerResult = results[2]
 
-      if (modelResult.status === 'fulfilled') {
-        const katanaModel = modelResult.value
-        rightKatanaGroup.add(katanaModel)
-        const leftModel = katanaModel.clone(true)
-        leftKatanaGroup.add(leftModel)
-        setModelReady(true)
-      } else {
-        console.error('[GanryuCameraView] Model load error:', modelResult.reason)
+      if (rightResult.status === 'fulfilled') {
+        while (rightKatanaGroup.children.length > 0) {
+          rightKatanaGroup.remove(rightKatanaGroup.children[0])
+        }
+        rightKatanaGroup.add(rightResult.value)
+      }
+
+      if (leftResult.status === 'fulfilled') {
+        while (leftKatanaGroup.children.length > 0) {
+          leftKatanaGroup.remove(leftKatanaGroup.children[0])
+        }
+        leftKatanaGroup.add(leftResult.value)
       }
 
       if (landmarkerResult.status === 'fulfilled' && landmarkerResult.value) {
         landmarkerInstance = landmarkerResult.value
       }
 
-      // 4) 描画・トラッキングループ開始
+      setModelReady(true)
+
+      // 4) 描画ループ
       const renderLoop = () => {
         if (cancelled) return
 
@@ -142,7 +160,7 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
           const vh = video.videoHeight || 480
           const aspect = vw / vh
 
-          // 正射影カメラとレンダラーのアスペクト比を同期
+          // カメラとレンダラーのアスペクト比を動画に同期
           camera.left = -aspect
           camera.right = aspect
           camera.top = 1
@@ -160,7 +178,7 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
           const poses = estimateHandPoses(landmarkerInstance, video, performance.now())
           setPoseDetected(poses.hasPerson)
 
-          // 構えモードに応じた配置
+          // 構えモードに応じた判定
           const showRight =
             stanceMode === 'dual' ||
             stanceMode === 'right' ||
@@ -171,35 +189,59 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
             stanceMode === 'left' ||
             (stanceMode === 'auto' && poses.leftHand.detected && !poses.rightHand.detected)
 
-          // 右手の刀配置
+          // アニメーション時刻
+          const nowMs = performance.now()
+
+          // --- 右手の刀 ---
           if (showRight && rightKatanaGroup.children.length > 0) {
             rightKatanaGroup.visible = true
-            const posX = (poses.rightHand.x * 2 - 1) * aspect
-            const posY = -(poses.rightHand.y * 2 - 1)
-            rightKatanaGroup.position.set(posX, posY, 2)
-            rightKatanaGroup.rotation.z = -poses.rightHand.angle
-            const sc = poses.rightHand.scale * (vh / 600)
-            rightKatanaGroup.scale.set(sc, sc, sc)
+            if (poses.rightHand.detected) {
+              // 手首に追従
+              const posX = (poses.rightHand.x * 2 - 1) * aspect
+              const posY = -(poses.rightHand.y * 2 - 1)
+              rightKatanaGroup.position.set(posX, posY, 2)
+              // 腕の角度に合わせて刀を傾ける
+              rightKatanaGroup.rotation.z = -poses.rightHand.angle - Math.PI / 4
+              const sc = poses.rightHand.scale * 0.85
+              rightKatanaGroup.scale.set(sc, sc, sc)
+            } else {
+              // 未検知時のデフォルト構え表示（画面右下・自然な構え）
+              const floatY = Math.sin(nowMs / 800) * 0.03
+              rightKatanaGroup.position.set(aspect * 0.5, -0.2 + floatY, 2)
+              rightKatanaGroup.rotation.z = -Math.PI / 6
+              rightKatanaGroup.scale.set(0.9, 0.9, 0.9)
+            }
           } else {
             rightKatanaGroup.visible = false
           }
 
-          // 左手の刀配置
+          // --- 左手の刀 ---
           if (showLeft && leftKatanaGroup.children.length > 0) {
             leftKatanaGroup.visible = true
-            const posX = (poses.leftHand.x * 2 - 1) * aspect
-            const posY = -(poses.leftHand.y * 2 - 1)
-            leftKatanaGroup.position.set(posX, posY, 2)
-            leftKatanaGroup.rotation.z = -poses.leftHand.angle + Math.PI * 0.3
-            const sc = poses.leftHand.scale * (vh / 600)
-            leftKatanaGroup.scale.set(-sc, sc, sc)
+            if (poses.leftHand.detected) {
+              // 左手首に追従
+              const posX = (poses.leftHand.x * 2 - 1) * aspect
+              const posY = -(poses.leftHand.y * 2 - 1)
+              leftKatanaGroup.position.set(posX, posY, 2)
+              leftKatanaGroup.rotation.z = -poses.leftHand.angle + Math.PI / 4
+              const sc = poses.leftHand.scale * 0.85
+              leftKatanaGroup.scale.set(-sc, sc, sc) // 左手用に水平反転
+            } else if (stanceMode === 'dual' || stanceMode === 'left') {
+              // 未検知時のデフォルト構え表示（画面左下）
+              const floatY = Math.sin((nowMs + 400) / 800) * 0.03
+              leftKatanaGroup.position.set(-aspect * 0.5, -0.2 + floatY, 2)
+              leftKatanaGroup.rotation.z = Math.PI / 6
+              leftKatanaGroup.scale.set(-0.75, 0.75, 0.75)
+            } else {
+              leftKatanaGroup.visible = false
+            }
           } else {
             leftKatanaGroup.visible = false
           }
 
           renderer.render(scene, camera)
 
-          // 撮影リクエストの処理
+          // 写真撮影合成処理
           if (captureRequestedRef.current) {
             captureRequestedRef.current = false
             try {
@@ -224,7 +266,7 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
       stopCamera()
       renderer.dispose()
     }
-  }, [facingMode, stanceMode, onCapture, onError, startCamera, stopCamera])
+  }, [facingMode, stanceMode, katanaType, onCapture, onError, startCamera, stopCamera])
 
   const handleShutter = () => {
     captureRequestedRef.current = true
@@ -259,7 +301,7 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
         />
 
         {/* ガイダンスバッジ */}
-        <div className="camera-viewfinder-guide" style={{ top: '16px' }}>
+        <div className="camera-viewfinder-guide" style={{ top: '14px' }}>
           <span className="guide-text">
             {!cameraReady
               ? '📷 カメラを起動中...'
@@ -267,59 +309,107 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
                 ? '⚔️ 刀モデルを準備中...'
                 : poseDetected
                   ? '⚔️ 刀を構えました！'
-                  : '📸 手または上半身を映すと刀が手に握られます'}
+                  : '📸 手をかざすと刀が手に握られます'}
           </span>
         </div>
 
-        {/* 構え・スタイル切替ツールバー */}
+        {/* 刀の種類 & 構え切替ツールバー */}
         {modelReady && (
           <div
             style={{
               position: 'absolute',
-              top: '60px',
+              top: '56px',
               left: '50%',
               transform: 'translateX(-50%)',
               display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
               gap: '6px',
-              background: 'rgba(0,0,0,0.65)',
-              backdropFilter: 'blur(8px)',
-              padding: '6px 10px',
-              borderRadius: '999px',
               zIndex: 5,
+              width: '90%',
+              maxWidth: '420px',
             }}
           >
-            <button
-              type="button"
-              className={`btn ${stanceMode === 'auto' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '999px' }}
-              onClick={() => setStanceMode('auto')}
+            {/* 刀の選択 */}
+            <div
+              style={{
+                display: 'flex',
+                gap: '4px',
+                background: 'rgba(0,0,0,0.7)',
+                backdropFilter: 'blur(8px)',
+                padding: '4px 8px',
+                borderRadius: '999px',
+              }}
             >
-              自動
-            </button>
-            <button
-              type="button"
-              className={`btn ${stanceMode === 'right' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '999px' }}
-              onClick={() => setStanceMode('right')}
-            >
-              右手 ⚔️
-            </button>
-            <button
-              type="button"
-              className={`btn ${stanceMode === 'left' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '999px' }}
-              onClick={() => setStanceMode('left')}
-            >
-              左手 ⚔️
-            </button>
-            <button
-              type="button"
-              className={`btn ${stanceMode === 'dual' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '999px' }}
-              onClick={() => setStanceMode('dual')}
-            >
-              二刀流 ⚔️⚔️
-            </button>
+              <button
+                type="button"
+                className={`btn ${katanaType === 'standard' && stanceMode !== 'dual' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ padding: '4px 10px', fontSize: '11px', borderRadius: '999px' }}
+                onClick={() => {
+                  setKatanaType('standard')
+                  if (stanceMode === 'dual') setStanceMode('auto')
+                }}
+              >
+                武蔵の打刀
+              </button>
+              <button
+                type="button"
+                className={`btn ${katanaType === 'nodachi' && stanceMode !== 'dual' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ padding: '4px 10px', fontSize: '11px', borderRadius: '999px' }}
+                onClick={() => {
+                  setKatanaType('nodachi')
+                  if (stanceMode === 'dual') setStanceMode('auto')
+                }}
+              >
+                小次郎の物干し竿
+              </button>
+              <button
+                type="button"
+                className={`btn ${stanceMode === 'dual' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ padding: '4px 10px', fontSize: '11px', borderRadius: '999px' }}
+                onClick={() => setStanceMode('dual')}
+              >
+                二刀流 ⚔️⚔️
+              </button>
+            </div>
+
+            {/* 構えの手（二刀流以外） */}
+            {stanceMode !== 'dual' && (
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '4px',
+                  background: 'rgba(0,0,0,0.5)',
+                  padding: '3px 6px',
+                  borderRadius: '999px',
+                }}
+              >
+                <button
+                  type="button"
+                  className={`btn ${stanceMode === 'auto' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ padding: '2px 8px', fontSize: '10px', borderRadius: '999px' }}
+                  onClick={() => setStanceMode('auto')}
+                >
+                  自動検知
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${stanceMode === 'right' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ padding: '2px 8px', fontSize: '10px', borderRadius: '999px' }}
+                  onClick={() => setStanceMode('right')}
+                >
+                  右手
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${stanceMode === 'left' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ padding: '2px 8px', fontSize: '10px', borderRadius: '999px' }}
+                  onClick={() => setStanceMode('left')}
+                >
+                  左手
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
