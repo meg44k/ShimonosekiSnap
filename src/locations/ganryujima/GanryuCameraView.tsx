@@ -5,10 +5,10 @@ import katanaImgUrl from './katana_upright.png'
 
 // 刀画像のサイズと柄の握り手アンカー座標 (katana_meta.json に準拠)
 const KATANA_META = {
-  width: 123,
-  height: 784,
-  anchorX: 75,
-  anchorY: 600,
+  width: 147,
+  height: 1052,
+  anchorX: 100,
+  anchorY: 783,
 }
 
 interface GanryuCameraViewProps {

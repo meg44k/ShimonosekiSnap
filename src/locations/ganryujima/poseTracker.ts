@@ -170,7 +170,7 @@ function extractHandPoseFromLandmarks(
   const wristPixelY = wrist.y * imageHeight
   const armLenPx = Math.hypot(wristPixelX - elbowPixelX, wristPixelY - elbowPixelY)
   // 刀の全長が腕の長さの約2.5〜3.0倍程度になるスケール
-  const targetScale = Math.max(0.4, Math.min(2.5, (armLenPx * 2.8) / 784))
+  const targetScale = Math.max(0.35, Math.min(2.5, (armLenPx * 2.8) / 1052))
 
   return {
     detected: true,
@@ -199,7 +199,7 @@ export async function detectPoseOnImage(
       pixelX: width * 0.7,
       pixelY: height * 0.65,
       angle: Math.PI / 12,
-      scale: (height * 0.5) / 784,
+      scale: (height * 0.65) / 1052,
       isGrasping: false,
       score: 0,
     },
@@ -208,7 +208,7 @@ export async function detectPoseOnImage(
       pixelX: width * 0.3,
       pixelY: height * 0.65,
       angle: -Math.PI / 12,
-      scale: (height * 0.5) / 784,
+      scale: (height * 0.65) / 1052,
       isGrasping: false,
       score: 0,
     },
