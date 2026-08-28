@@ -8,6 +8,12 @@
 //
 // Usage: node scripts/process-whale-model.mjs
 //
+// Attribution:
+// This work is based on "Humpback Whale (Swimming)"
+// (https://sketchfab.com/3d-models/humpback-whale-swimming-f4912be9163a4f45b2480df8ccb8b2c6)
+// by Connlan_Immure (https://sketchfab.com/Connlan_Immure)
+// licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+//
 // Steps:
 //   1. Strip all texture/image data + unused vertex attributes from the glTF
 //      JSON (the line-art pass only needs the mesh's own NORMAL attribute).
