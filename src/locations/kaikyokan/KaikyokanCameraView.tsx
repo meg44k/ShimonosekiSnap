@@ -135,7 +135,7 @@ export function KaikyokanCameraView({ onCapture, onClose, onError }: KaikyokanCa
         })
       }
 
-      // 4) 検出された手のひらの上にペンギンを描画
+      // 4) 検出された手のひらの上にペンギンを描画（大きめに表示）
       const activeHand = poses.rightHand.detected
         ? poses.rightHand
         : poses.leftHand.detected
@@ -144,9 +144,8 @@ export function KaikyokanCameraView({ onCapture, onClose, onError }: KaikyokanCa
 
       photoCtx.save()
       if (activeHand && activeHand.detected) {
-        // ペンギンのスケール: 手のひらサイズに合わせた適正サイズ
-        // activeHand.scale は腕の長さに比例
-        const penguinScale = Math.max(0.2, Math.min(1.2, activeHand.scale * 0.45))
+        // ペンギンのスケール: 存在感のある大きめサイズ（手のひらの上にしっかり立つ）
+        const penguinScale = Math.max(0.4, Math.min(2.0, activeHand.scale * 0.9))
         
         // 手のひらの位置 (pixelX, pixelY) にペンギンの足元 (anchorX, anchorY) を配置
         photoCtx.translate(activeHand.pixelX, activeHand.pixelY)
@@ -163,10 +162,10 @@ export function KaikyokanCameraView({ onCapture, onClose, onError }: KaikyokanCa
           PENGUIN_META.height * penguinScale,
         )
       } else {
-        // 人物が検知できなかった場合のデフォルト配置（画面中央下側）
+        // 人物が検知できなかった場合のデフォルト配置（画面中央下側・大きめ）
         const defaultX = vw * 0.5
         const defaultY = vh * 0.75
-        const defaultScale = (vh * 0.35) / PENGUIN_META.height
+        const defaultScale = (vh * 0.55) / PENGUIN_META.height
         
         photoCtx.translate(defaultX, defaultY)
         photoCtx.drawImage(
@@ -216,7 +215,7 @@ export function KaikyokanCameraView({ onCapture, onClose, onError }: KaikyokanCa
               ? '📷 カメラを起動中...'
               : isProcessing
                 ? '🐧 手のひらを検出してペンギンを乗せています...'
-                : '📸 手のひらをカメラに向けて撮影してください'}
+                : '📸 手のひらを上にしてみてね'}
           </span>
         </div>
 
