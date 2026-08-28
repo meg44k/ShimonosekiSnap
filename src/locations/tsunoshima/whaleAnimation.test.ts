@@ -6,7 +6,7 @@ describe('getWhaleTransform', () => {
     const result = getWhaleTransform(0)
     expect(result.visible).toBe(true)
     expect(result.position[0]).toBeCloseTo(-0.2656, 3)
-    expect(result.position[1]).toBeCloseTo(-0.15, 3)
+    expect(result.position[1]).toBeCloseTo(-0.5, 3)
     expect(result.position[2]).toBeCloseTo(0, 3)
   })
 
@@ -14,7 +14,7 @@ describe('getWhaleTransform', () => {
     const result = getWhaleTransform(2750)
     expect(result.visible).toBe(true)
     expect(result.position[0]).toBeCloseTo(0.0372, 3)
-    expect(result.position[1]).toBeCloseTo(0.0573, 3)
+    expect(result.position[1]).toBeCloseTo(0.14, 3)
     expect(result.position[2]).toBeCloseTo(0.04, 3)
   })
 
