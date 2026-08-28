@@ -3,7 +3,6 @@ import { getLocation } from './locations'
 import type { LocationConfig } from './locations/types'
 import { GuidancePage, MODEL_CREDIT } from './pages/GuidancePage'
 import { parseRoute } from './router'
-import { BUILD_TAG } from './buildTag'
 import './App.css'
 
 const ArCameraView = lazy(() =>
@@ -96,7 +95,6 @@ function App() {
             >
               カメラを起動
             </button>
-            <p className="model-credit">build {BUILD_TAG}</p>
             <p className="model-credit">{MODEL_CREDIT}</p>
           </div>
         )}

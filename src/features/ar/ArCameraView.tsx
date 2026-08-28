@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react'
 import { MindARThree } from 'mind-ar/dist/mindar-image-three.prod.js'
 import * as THREE from 'three'
 import type { ArTransform, LocationConfig } from '../../locations/types'
-import { BUILD_TAG } from '../../buildTag'
 import { captureComposite } from './captureComposite'
 import { createLineArtRenderer, WHALE_LINEART_LAYER, type LineArtRenderer } from './lineArtRenderer'
 
@@ -263,7 +262,6 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
 
   return (
     <div className="camera-screen">
-      <div className="build-tag">build {BUILD_TAG}</div>
       <div className="video-container">
         <div className="ar-container" ref={containerRef} />
         {(!ready || !targetFound) && (
