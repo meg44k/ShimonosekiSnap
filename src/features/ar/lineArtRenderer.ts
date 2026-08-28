@@ -30,12 +30,13 @@ export const WHALE_LINEART_LAYER = 1
 const BOIL_HZ = 8 // 線のゆらぎの更新頻度(回/秒)
 const BOIL_AMP = 1.6 // ゆらぎの振幅(テクセル)
 const BOIL_CELLS = 6.0 // boil のオフセットを共有する空間セルの分割数(小さいほど広い領域が一緒に動く)
-// しきい値を下げるほど、緩やかな面の曲がりや浅い段差も線として拾う=線が増える。
-// 参考イラストのように体の丸みに沿った形の線を出すため低め(法線)に設定。
-const DEPTH_THRESHOLD = 0.1 // 深度エッジのしきい値(ビュー空間の距離)。下げるとヒレ/口などの細い段差も線になる
-const NORMAL_THRESHOLD = 0.18 // 法線エッジのしきい値(法線ベクトル勾配の長さ)。下げると体の曲面に沿った線が増える
-const HALO_RADIUS = 2.0 // ハローの膨張半径(テクセル)
-const HALO_ALPHA = 0.38 // ハローの不透明度。下げると発光の塊感が減り線画寄りになる
+// 参考イラストは「クリーンな輪郭(シルエット)線 + ごく少数の折れ線」。
+// シルエットは深度の段差(背景との差)で出るので DEPTH は低め=くっきり、
+// 体の丸みに沿った面の陰影を線にしないよう NORMAL は高め=硬い折れだけ拾う。
+const DEPTH_THRESHOLD = 0.08 // 深度エッジのしきい値。低いほど輪郭・ヒレの縁がくっきり
+const NORMAL_THRESHOLD = 0.75 // 法線エッジのしきい値。高いほど「縁取り」寄り(曲面の形の線を出さない)
+const HALO_RADIUS = 1.6 // ハローの膨張半径(テクセル)。細いほど線画的
+const HALO_ALPHA = 0.34 // ハローの不透明度
 const LINE_COLOR = new THREE.Color('#eaf6ff') // 線の色(ほぼ白)
 const HALO_COLOR = new THREE.Color('#0a1a2a') // ハローの色(暗い紺)
 const RT_SCALE = 1 // 1 未満にするとエッジパスを低解像度化して負荷を下げる
