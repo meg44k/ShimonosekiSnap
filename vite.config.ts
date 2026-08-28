@@ -2,6 +2,7 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 import react from '@vitejs/plugin-react'
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 
 function saveTargetPlugin(): Plugin {
@@ -34,4 +35,12 @@ function saveTargetPlugin(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), basicSsl(), saveTargetPlugin()],
+  resolve: {
+    alias: [
+      {
+        find: /^@tensorflow-models\/face-detection$/,
+        replacement: fileURLToPath(new URL('./src/shims/faceDetectionTfjs.ts', import.meta.url)),
+      },
+    ],
+  },
 })

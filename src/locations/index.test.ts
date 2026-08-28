@@ -7,7 +7,10 @@ describe('locations registry', () => {
     expect(location).toBeDefined()
     expect(location?.id).toBe('tsunoshima')
     expect(location?.name).toBe('角島大橋')
-    expect(location?.targetSrc).toBe('targets/tunoshima.mind')
+    expect(location?.cameraMode).toBe('image-target')
+    if (location?.cameraMode === 'image-target') {
+      expect(location.targetSrc).toBe('targets/tunoshima.mind')
+    }
   })
 
   it('returns the akama location by id', () => {
@@ -24,14 +27,23 @@ describe('locations registry', () => {
     expect(location?.name).toBe('海響館')
   })
 
+  it('registers yumetower as a person-detection location', () => {
+    const location = getLocation('yumetower')
+    expect(location).toBeDefined()
+    expect(location?.id).toBe('yumetower')
+    expect(location?.name).toBe('海峡ゆめタワー')
+    expect(location?.cameraMode).toBe('person-detection')
+  })
+
   it('returns undefined for an unknown id', () => {
     expect(getLocation('nonexistent')).toBeUndefined()
   })
 
-  it('lists all registered locations, including tsunoshima, akama, and kaikyokan', () => {
+  it('lists all registered locations, including tsunoshima, akama, yumetower, and kaikyokan', () => {
     const locations = listLocations()
     expect(locations.some((location) => location.id === 'tsunoshima')).toBe(true)
     expect(locations.some((location) => location.id === 'akama')).toBe(true)
+    expect(locations.some((location) => location.id === 'yumetower')).toBe(true)
     expect(locations.some((location) => location.id === 'kaikyokan')).toBe(true)
   })
 

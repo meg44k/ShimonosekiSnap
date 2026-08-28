@@ -2,8 +2,14 @@ import { akamaLocation } from './akama'
 import { kaikyokanLocation } from './kaikyokan'
 import { tsunoshimaLocation } from './tsunoshima'
 import type { LocationConfig } from './types'
+import { yumetowerLocation } from './yumetower'
 
-const LOCATIONS: readonly LocationConfig[] = [tsunoshimaLocation, akamaLocation, kaikyokanLocation]
+const LOCATIONS: readonly LocationConfig[] = [
+  tsunoshimaLocation,
+  akamaLocation,
+  yumetowerLocation,
+  kaikyokanLocation,
+]
 
 const seenIds = new Set<string>()
 for (const location of LOCATIONS) {

@@ -1,12 +1,17 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { getLocation } from './locations'
 import type { LocationConfig } from './locations/types'
-import { GuidancePage } from './pages/GuidancePage'
+import { GuidancePage, MODEL_CREDIT } from './pages/GuidancePage'
 import { navigate, parseRoute, useRoute } from './router'
 import './App.css'
 
 const ArCameraView = lazy(() =>
   import('./features/ar/ArCameraView').then((module) => ({ default: module.ArCameraView })),
+)
+const PersonDetectionCameraView = lazy(() =>
+  import('./locations/yumetower/PersonDetectionCameraView').then((module) => ({
+    default: module.PersonDetectionCameraView,
+  })),
 )
 
 const KaikyokanCameraView = lazy(() =>
@@ -109,7 +114,14 @@ function App() {
     )
   }
 
-  const locationIcon = location.id === 'kaikyokan' ? '🐧' : location.id === 'akama' ? '⛩️' : '🌊'
+  const locationIcon =
+    location.id === 'kaikyokan'
+      ? '🐧'
+      : location.id === 'akama'
+        ? '⛩️'
+        : location.id === 'yumetower'
+          ? '🗼'
+          : '🌊'
 
   return (
     <div className="app">
@@ -136,7 +148,7 @@ function App() {
           <div className="start-screen">
             <div className="camera-icon">{locationIcon}</div>
             <h2>{location.name}</h2>
-            <p>{location.guidanceText}</p>
+            <p>{location.guidanceText || `${location.name}にカメラを向けて撮影しましょう`}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '280px' }}>
               <button
                 type="button"
@@ -156,6 +168,7 @@ function App() {
                 ← スポット一覧に戻る
               </button>
             </div>
+            {location.id === 'tsunoshima' && <p className="model-credit">{MODEL_CREDIT}</p>}
           </div>
         )}
 
@@ -163,6 +176,14 @@ function App() {
           <Suspense fallback={<div className="camera-screen" />}>
             {location.id === 'kaikyokan' ? (
               <KaikyokanCameraView
+                key={location.id}
+                location={location}
+                onCapture={handleCapture}
+                onClose={() => setState('idle')}
+                onError={handleArError}
+              />
+            ) : location.cameraMode === 'person-detection' ? (
+              <PersonDetectionCameraView
                 key={location.id}
                 location={location}
                 onCapture={handleCapture}
