@@ -40,6 +40,11 @@ export interface ArTransform {
  * ArCameraViewはこれをエフェクトグループの外(アンカー直下)に追加し、
  * markerUpdateをターゲット追跡中は毎フレーム(elapsedMsとともに)呼び出す。
  * updateと異なり、getTransform().visibleがfalseの間も呼び出され続ける。
+ *
+ * lineArtも省略可能。trueにすると、ArCameraViewはobjectのメッシュを
+ * 専用レイヤーに隔離し、法線+深度バッファに描いてからエッジ検出で
+ * 線画化する(通常のマテリアル描画は行わない)。objectに含まれる
+ * Sprite(スパークル等)は線画化されず通常描画される。
  */
 export interface LoadedEffectModel {
   object: THREE.Object3D
@@ -47,6 +52,7 @@ export interface LoadedEffectModel {
   clippingPlanes?: THREE.Plane[]
   markerObject?: THREE.Object3D
   markerUpdate?: (deltaSeconds: number, elapsedMs: number) => void
+  lineArt?: boolean
 }
 
 export interface ArEffect {
