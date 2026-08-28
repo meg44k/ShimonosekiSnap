@@ -1,3 +1,6 @@
+import * as THREE from 'three'
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js'
+
 export function quantizeTime(elapsedMs: number, hz: number): number {
   return Math.floor((elapsedMs / 1000) * hz)
 }
@@ -19,4 +22,208 @@ export function resolveRenderTargetSize(
     width: Math.max(1, Math.round(cssWidth * ratio)),
     height: Math.max(1, Math.round(cssHeight * ratio)),
   }
+}
+
+export const WHALE_LINEART_LAYER = 1
+
+// --- チューニング用パラメータ(実機で調整。Task 7) ---
+const BOIL_HZ = 8 // 線のゆらぎの更新頻度(回/秒)
+const BOIL_AMP = 1.6 // ゆらぎの振幅(テクセル)
+const DEPTH_THRESHOLD = 0.18 // 深度エッジのしきい値(ビュー空間の距離)
+const NORMAL_THRESHOLD = 0.45 // 法線エッジのしきい値(法線ベクトル勾配の長さ)
+const HALO_RADIUS = 2.5 // ハローの膨張半径(テクセル)
+const HALO_ALPHA = 0.5 // ハローの不透明度
+const LINE_COLOR = new THREE.Color('#eaf6ff') // 線の色(ほぼ白)
+const HALO_COLOR = new THREE.Color('#0a1a2a') // ハローの色(暗い紺)
+const RT_SCALE = 1 // 1 未満にするとエッジパスを低解像度化して負荷を下げる
+
+const EDGE_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+  }
+`
+
+const EDGE_FRAG = /* glsl */ `
+  precision highp float;
+  varying vec2 vUv;
+  uniform sampler2D tNormal;
+  uniform sampler2D tDepth;
+  uniform vec2 uResolution;
+  uniform float uNear;
+  uniform float uFar;
+  uniform float uStep;
+  uniform vec3 uLineColor;
+  uniform vec3 uHaloColor;
+  uniform float uHaloAlpha;
+  uniform float uHaloRadius;
+  uniform float uDepthThreshold;
+  uniform float uNormalThreshold;
+  uniform float uBoilAmp;
+
+  // 非線形の遠近深度(0..1)を線形のビューZ(負値)に変換する
+  float linearizeDepth(float d) {
+    return (uNear * uFar) / ((uFar - uNear) * d - uFar);
+  }
+
+  float hash12(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+  }
+
+  void main() {
+    vec2 texel = 1.0 / uResolution;
+
+    // boil: 数コマに1回だけ変わる、カーネル全体で共通のオフセット
+    vec2 boil = (vec2(
+      hash12(vUv * 37.0 + uStep),
+      hash12(vUv * 37.0 + uStep + 19.7)
+    ) - 0.5) * uBoilAmp * texel;
+    vec2 uv = vUv + boil;
+
+    float d[9];
+    vec3 n[9];
+    int k = 0;
+    for (int y = -1; y <= 1; y++) {
+      for (int x = -1; x <= 1; x++) {
+        vec2 o = vec2(float(x), float(y)) * texel;
+        d[k] = linearizeDepth(texture2D(tDepth, uv + o).r);
+        n[k] = texture2D(tNormal, uv + o).rgb * 2.0 - 1.0;
+        k++;
+      }
+    }
+
+    float gxD = d[0] + 2.0 * d[3] + d[6] - d[2] - 2.0 * d[5] - d[8];
+    float gyD = d[0] + 2.0 * d[1] + d[2] - d[6] - 2.0 * d[7] - d[8];
+    float depthEdge = length(vec2(gxD, gyD));
+
+    vec3 gxN = n[0] + 2.0 * n[3] + n[6] - n[2] - 2.0 * n[5] - n[8];
+    vec3 gyN = n[0] + 2.0 * n[1] + n[2] - n[6] - 2.0 * n[7] - n[8];
+    float normalEdge = max(length(gxN), length(gyN));
+
+    float eDepth = smoothstep(uDepthThreshold, uDepthThreshold * 2.0, depthEdge);
+    float eNormal = smoothstep(uNormalThreshold, uNormalThreshold * 2.0, normalEdge);
+    float lineCore = max(eDepth, eNormal);
+
+    // ハロー: シルエット(中心との深度差)を広い半径で拾って膨張させる
+    float halo = 0.0;
+    for (int i = 0; i < 8; i++) {
+      float a = float(i) / 8.0 * 6.2831853;
+      vec2 o = vec2(cos(a), sin(a)) * texel * uHaloRadius;
+      float dd = linearizeDepth(texture2D(tDepth, uv + o).r);
+      halo = max(halo, step(uDepthThreshold, abs(dd - d[4])));
+    }
+    halo = max(halo, lineCore);
+
+    vec3 rgb = mix(uHaloColor, uLineColor, lineCore);
+    float alpha = clamp(max(lineCore, halo * uHaloAlpha), 0.0, 1.0);
+    if (alpha < 0.003) discard;
+    gl_FragColor = vec4(rgb, alpha);
+  }
+`
+
+export interface LineArtRenderer {
+  setSize(cssWidth: number, cssHeight: number, pixelRatio: number): void
+  setClippingPlanes(planes: THREE.Plane[] | null): void
+  renderLineArt(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.PerspectiveCamera,
+    elapsedMs: number,
+  ): void
+  dispose(): void
+}
+
+export function createLineArtRenderer(): LineArtRenderer {
+  const normalTarget = new THREE.WebGLRenderTarget(1, 1, {
+    depthBuffer: true,
+    depthTexture: new THREE.DepthTexture(1, 1, THREE.UnsignedIntType),
+    minFilter: THREE.NearestFilter,
+    magFilter: THREE.NearestFilter,
+  })
+
+  const normalMaterial = new THREE.MeshNormalMaterial()
+  // MeshNormalMaterial は SkinnedMesh に対して自動でスキニングされる(three r160)。
+  // 遊泳変形は法線バッファに反映される。
+  // クリッピングは material.clippingPlanes(setClippingPlanes で設定)と
+  // renderer.localClippingEnabled(ArCameraView 側で有効化)で駆動されるため、
+  // ここで .clipping フラグを立てる必要はない。
+
+  const uniforms = {
+    tNormal: { value: normalTarget.texture },
+    tDepth: { value: normalTarget.depthTexture },
+    uResolution: { value: new THREE.Vector2(1, 1) },
+    uNear: { value: 0.01 },
+    uFar: { value: 1000 },
+    uStep: { value: 0 },
+    uLineColor: { value: LINE_COLOR },
+    uHaloColor: { value: HALO_COLOR },
+    uHaloAlpha: { value: HALO_ALPHA },
+    uHaloRadius: { value: HALO_RADIUS },
+    uDepthThreshold: { value: DEPTH_THRESHOLD },
+    uNormalThreshold: { value: NORMAL_THRESHOLD },
+    uBoilAmp: { value: BOIL_AMP },
+  }
+
+  const edgeMaterial = new THREE.ShaderMaterial({
+    vertexShader: EDGE_VERT,
+    fragmentShader: EDGE_FRAG,
+    uniforms,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  })
+  const fsQuad = new FullScreenQuad(edgeMaterial)
+
+  return {
+    // internals exposed for tests only
+    _normalTarget: normalTarget,
+
+    setSize(cssWidth, cssHeight, pixelRatio) {
+      const { width, height } = resolveRenderTargetSize(cssWidth, cssHeight, pixelRatio, {
+        maxPixelRatio: 2,
+        scale: RT_SCALE,
+      })
+      normalTarget.setSize(width, height)
+      normalTarget.depthTexture.image.width = width
+      normalTarget.depthTexture.image.height = height
+      uniforms.uResolution.value.set(width, height)
+    },
+
+    setClippingPlanes(planes) {
+      normalMaterial.clippingPlanes = planes
+    },
+
+    renderLineArt(renderer, scene, camera, elapsedMs) {
+      const savedMask = camera.layers.mask
+      const savedTarget = renderer.getRenderTarget()
+
+      // --- 法線プリパス ---
+      renderer.setRenderTarget(normalTarget)
+      renderer.setClearColor(0x000000, 0)
+      renderer.clear(true, true, false)
+      scene.overrideMaterial = normalMaterial
+      camera.layers.set(WHALE_LINEART_LAYER)
+      renderer.render(scene, camera)
+      scene.overrideMaterial = null
+      camera.layers.mask = savedMask
+      renderer.setRenderTarget(savedTarget)
+
+      // --- エッジ検出パス(現在バインドされている描画先へ) ---
+      uniforms.uNear.value = camera.near
+      uniforms.uFar.value = camera.far
+      uniforms.uStep.value = quantizeTime(elapsedMs, BOIL_HZ)
+      fsQuad.render(renderer)
+    },
+
+    dispose() {
+      normalTarget.dispose()
+      normalTarget.depthTexture.dispose()
+      normalMaterial.dispose()
+      edgeMaterial.dispose()
+      fsQuad.dispose()
+    },
+  } as LineArtRenderer & { _normalTarget: THREE.WebGLRenderTarget }
 }
