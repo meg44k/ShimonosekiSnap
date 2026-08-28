@@ -17,14 +17,22 @@ describe('locations registry', () => {
     expect(location?.name).toBe('赤間神宮')
   })
 
+  it('returns the kaikyokan location by id', () => {
+    const location = getLocation('kaikyokan')
+    expect(location).toBeDefined()
+    expect(location?.id).toBe('kaikyokan')
+    expect(location?.name).toBe('海響館')
+  })
+
   it('returns undefined for an unknown id', () => {
     expect(getLocation('nonexistent')).toBeUndefined()
   })
 
-  it('lists all registered locations, including tsunoshima and akama', () => {
+  it('lists all registered locations, including tsunoshima, akama, and kaikyokan', () => {
     const locations = listLocations()
     expect(locations.some((location) => location.id === 'tsunoshima')).toBe(true)
     expect(locations.some((location) => location.id === 'akama')).toBe(true)
+    expect(locations.some((location) => location.id === 'kaikyokan')).toBe(true)
   })
 
   it('has no duplicate ids among registered locations', () => {

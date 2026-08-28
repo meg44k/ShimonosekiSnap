@@ -1,13 +1,20 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { getLocation } from './locations'
 import type { LocationConfig } from './locations/types'
-import { CompilePage } from './pages/CompilePage'
 import { GuidancePage } from './pages/GuidancePage'
 import { navigate, parseRoute, useRoute } from './router'
 import './App.css'
 
 const ArCameraView = lazy(() =>
   import('./features/ar/ArCameraView').then((module) => ({ default: module.ArCameraView })),
+)
+
+const KaikyokanCameraView = lazy(() =>
+  import('./locations/kaikyokan/KaikyokanCameraView').then((module) => ({ default: module.KaikyokanCameraView })),
+)
+
+const CompilePage = lazy(() =>
+  import('./pages/CompilePage').then((module) => ({ default: module.CompilePage })),
 )
 
 type AppState = 'idle' | 'camera' | 'preview'
@@ -75,7 +82,9 @@ function App() {
           <p className="subtitle">ARターゲットデータ生成ツール</p>
         </header>
         <main className="app-main">
-          <CompilePage />
+          <Suspense fallback={<div className="start-screen"><p>読み込み中...</p></div>}>
+            <CompilePage />
+          </Suspense>
         </main>
       </div>
     )
@@ -100,6 +109,8 @@ function App() {
     )
   }
 
+  const locationIcon = location.id === 'kaikyokan' ? '🐧' : location.id === 'akama' ? '⛩️' : '🌊'
+
   return (
     <div className="app">
       {state !== 'camera' && (
@@ -123,7 +134,7 @@ function App() {
 
         {state === 'idle' && (
           <div className="start-screen">
-            <div className="camera-icon">⛩️</div>
+            <div className="camera-icon">{locationIcon}</div>
             <h2>{location.name}</h2>
             <p>{location.guidanceText}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '280px' }}>
@@ -150,13 +161,23 @@ function App() {
 
         {state === 'camera' && (
           <Suspense fallback={<div className="camera-screen" />}>
-            <ArCameraView
-              key={location.id}
-              location={location}
-              onCapture={handleCapture}
-              onClose={() => setState('idle')}
-              onError={handleArError}
-            />
+            {location.id === 'kaikyokan' ? (
+              <KaikyokanCameraView
+                key={location.id}
+                location={location}
+                onCapture={handleCapture}
+                onClose={() => setState('idle')}
+                onError={handleArError}
+              />
+            ) : (
+              <ArCameraView
+                key={location.id}
+                location={location}
+                onCapture={handleCapture}
+                onClose={() => setState('idle')}
+                onError={handleArError}
+              />
+            )}
           </Suspense>
         )}
 

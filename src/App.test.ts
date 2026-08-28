@@ -17,6 +17,12 @@ describe('resolveLocation', () => {
     expect(location?.name).toBe('赤間神宮')
   })
 
+  it('returns the location config for kaikyokan spot', () => {
+    const location = resolveLocation('/spot/kaikyokan')
+    expect(location?.id).toBe('kaikyokan')
+    expect(location?.name).toBe('海響館')
+  })
+
   it('returns null for an unknown spot id', () => {
     expect(resolveLocation('/spot/doesnotexist')).toBeNull()
   })
