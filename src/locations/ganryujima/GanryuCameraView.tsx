@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import * as THREE from 'three'
+import { captureComposite } from '../../features/ar/captureComposite'
 import type { LocationConfig } from '../types'
 import { loadKatanaModel, type KatanaType } from './loadKatanaModel'
-import { getPoseLandmarker, estimateHandPoses, type PoseTrackingResult } from './poseTracker'
+import { getPoseLandmarker, estimateHandPoses } from './poseTracker'
 import type { PoseLandmarker } from '@mediapipe/tasks-vision'
 
 interface GanryuCameraViewProps {
@@ -14,54 +15,10 @@ interface GanryuCameraViewProps {
 
 type StanceMode = 'auto' | 'right' | 'left' | 'dual'
 
-/**
- * 撮影時にビデオ + 3D刀 + 指の前面オクルージョンを結合して高解像度画像を生成
- */
-function captureGanryuComposite(
-  video: HTMLVideoElement,
-  threeCanvas: HTMLCanvasElement,
-  occlusionCanvas: HTMLCanvasElement | null,
-  isMirror: boolean,
-): string {
-  const canvas = document.createElement('canvas')
-  canvas.width = threeCanvas.width
-  canvas.height = threeCanvas.height
-
-  const ctx = canvas.getContext('2d')
-  if (!ctx) {
-    throw new Error('2D context is not available')
-  }
-
-  const scale = Math.max(canvas.width / video.videoWidth, canvas.height / video.videoHeight)
-  const sw = canvas.width / scale
-  const sh = canvas.height / scale
-  const sx = (video.videoWidth - sw) / 2
-  const sy = (video.videoHeight - sh) / 2
-
-  ctx.save()
-  if (isMirror) {
-    ctx.translate(canvas.width, 0)
-    ctx.scale(-1, 1)
-  }
-  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
-  ctx.restore()
-
-  // 3D刀を描画
-  ctx.drawImage(threeCanvas, 0, 0, canvas.width, canvas.height)
-
-  // 指の前面オクルージョン（手前レイヤー）を描画
-  if (occlusionCanvas) {
-    ctx.drawImage(occlusionCanvas, 0, 0, canvas.width, canvas.height)
-  }
-
-  return canvas.toDataURL('image/png')
-}
-
 export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const occlusionCanvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const captureRequestedRef = useRef<boolean>(false)
 
@@ -138,11 +95,11 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setSize(window.innerWidth, window.innerHeight)
 
-    // ライティング（刀身の刃紋と金属光沢を強調）
+    // ライティング（刀身の刃紋と鍔の金色を鮮やかに強調）
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.6)
     scene.add(ambientLight)
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.3)
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x555555, 1.4)
     hemiLight.position.set(0, 20, 0)
     scene.add(hemiLight)
 
@@ -150,7 +107,7 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
     dirLight1.position.set(5, 10, 8)
     scene.add(dirLight1)
 
-    const dirLight2 = new THREE.DirectionalLight(0xd4af37, 1.4)
+    const dirLight2 = new THREE.DirectionalLight(0xd4af37, 1.5)
     dirLight2.position.set(-5, 5, -5)
     scene.add(dirLight2)
 
@@ -196,71 +153,7 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
 
       setModelReady(true)
 
-      // 4) 指の前面オクルージョン描画関数
-      const drawFingerOcclusion = (
-        poses: PoseTrackingResult,
-        video: HTMLVideoElement,
-        cw: number,
-        ch: number,
-        isMirror: boolean,
-      ) => {
-        const occCanvas = occlusionCanvasRef.current
-        if (!occCanvas) return
-
-        if (occCanvas.width !== cw || occCanvas.height !== ch) {
-          occCanvas.width = cw
-          occCanvas.height = ch
-        }
-
-        const ctx = occCanvas.getContext('2d')
-        if (!ctx) return
-        ctx.clearRect(0, 0, cw, ch)
-
-        const drawHandCutout = (info: typeof poses.rightHand) => {
-          if (!info.detected || !info.fingerOcclusion) return
-
-          const { cx, cy, rx, ry, angle } = info.fingerOcclusion
-
-          ctx.save()
-          // 拳の指部分を楕円クリッピングパスとして定義
-          ctx.beginPath()
-          ctx.ellipse(cx, cy, rx, ry, angle, 0, Math.PI * 2)
-          ctx.clip()
-
-          // ビデオの該当領域を描画（指が刀の柄の手前に乗る）
-          const scale = Math.max(cw / video.videoWidth, ch / video.videoHeight)
-          const sw = cw / scale
-          const sh = ch / scale
-          const sx = (video.videoWidth - sw) / 2
-          const sy = (video.videoHeight - sh) / 2
-
-          ctx.save()
-          if (isMirror) {
-            ctx.translate(cw, 0)
-            ctx.scale(-1, 1)
-          }
-          // 手前の指の立体感
-          ctx.globalAlpha = info.isGrasping ? 0.95 : 0.8
-          ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch)
-          ctx.restore()
-
-          // 指の輪郭に自然なソフトエッジと陰影を付与
-          ctx.strokeStyle = 'rgba(0,0,0,0.18)'
-          ctx.lineWidth = 2
-          ctx.stroke()
-
-          ctx.restore()
-        }
-
-        if (rightKatanaGroup.visible && poses.rightHand.detected) {
-          drawHandCutout(poses.rightHand)
-        }
-        if (leftKatanaGroup.visible && poses.leftHand.detected) {
-          drawHandCutout(poses.leftHand)
-        }
-      }
-
-      // 5) 描画・トラッキングループ
+      // 4) 描画・トラッキングループ
       const renderLoop = () => {
         if (cancelled) return
 
@@ -282,7 +175,7 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
             renderer.setSize(cw, ch, false)
           }
 
-          // 人物ポーズ推定（幾何学的角度拘束 + 把持判定 + オクルージョン）
+          // 人物ポーズ推定
           const isMirror = facingMode === 'user'
           const poses = estimateHandPoses(landmarkerInstance, video, container, isMirror, performance.now())
           setPoseState({
@@ -342,19 +235,11 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
 
           renderer.render(scene, camera)
 
-          // 指の前面オクルージョン（手前レイヤー）の描画
-          drawFingerOcclusion(poses, video, cw, ch, isMirror)
-
-          // 撮影リクエストの処理
+          // 撮影リクエストの処理（つばや刀身をクリアに合成）
           if (captureRequestedRef.current) {
             captureRequestedRef.current = false
             try {
-              const photoDataUrl = captureGanryuComposite(
-                video,
-                renderer.domElement,
-                occlusionCanvasRef.current,
-                isMirror,
-              )
+              const photoDataUrl = captureComposite(video, renderer.domElement)
               onCapture(photoDataUrl)
             } catch (err) {
               console.error('[GanryuCameraView] Capture error:', err)
@@ -417,35 +302,20 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
             height: '100%',
             objectFit: 'cover',
             pointerEvents: 'none',
-            zIndex: 2,
-          }}
-        />
-
-        {/* 指の前面オクルージョンキャンバス（柄を手前に包み込むレイヤー） */}
-        <canvas
-          ref={occlusionCanvasRef}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            pointerEvents: 'none',
-            zIndex: 3,
           }}
         />
 
         {/* ガイダンスバッジ */}
-        <div className="camera-viewfinder-guide" style={{ top: '14px', zIndex: 4 }}>
+        <div className="camera-viewfinder-guide" style={{ top: '14px' }}>
           <span className="guide-text">
             {!cameraReady
               ? '📷 カメラを起動中...'
               : !modelReady
                 ? '⚔️ 刀モデルを準備中...'
                 : poseState.isGrasping
-                  ? '⚔️ 刀をしっかりと握りました！'
+                  ? '⚔️ 刀をしっかりと構えました！'
                   : poseState.hasPerson
-                    ? '✊ 手を握り込むと刀をしっかり構えます'
+                    ? '✊ 手を握ると刀をしっかり構えます'
                     : '📸 手をかざすと刀が手に握られます'}
           </span>
         </div>
