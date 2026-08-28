@@ -71,10 +71,10 @@ export async function loadKatanaModel(type: KatanaType = 'standard'): Promise<TH
 
   // 高品質マテリアル
   const bladeMaterial = new THREE.MeshStandardMaterial({
-    color: 0xe8e8e8,
+    color: 0xf0f0f0,
     metalness: 0.95,
-    roughness: 0.15,
-    envMapIntensity: 1.5,
+    roughness: 0.12,
+    envMapIntensity: 1.6,
   })
 
   const tsubaMaterial = new THREE.MeshStandardMaterial({
@@ -84,7 +84,7 @@ export async function loadKatanaModel(type: KatanaType = 'standard'): Promise<TH
   })
 
   const gripMaterial = new THREE.MeshStandardMaterial({
-    color: 0x1a1a1a, // 深みのある黒（柄巻）
+    color: 0x181818, // 深みのある黒（柄巻）
     metalness: 0.1,
     roughness: 0.85,
   })
@@ -121,10 +121,19 @@ export async function loadKatanaModel(type: KatanaType = 'standard'): Promise<TH
     innerGroup.add(mesh)
   }
 
-  // グリップの中心座標を計算
+  // 鍔（ツバ）の位置と柄（グリップ）の範囲を計算
+  let tsubaX = 0
+  let tsubaFound = false
   const gripBox = new THREE.Box3()
+
   for (const mesh of extractedMeshes) {
-    if (mesh.name.toLowerCase().includes('handgrip')) {
+    const name = mesh.name.toLowerCase()
+    if (name.includes('tsuba')) {
+      const box = new THREE.Box3().setFromObject(mesh)
+      tsubaX = (box.min.x + box.max.x) / 2
+      tsubaFound = true
+    }
+    if (name.includes('handgrip')) {
       gripBox.expandByObject(mesh)
     }
   }
@@ -136,16 +145,16 @@ export async function loadKatanaModel(type: KatanaType = 'standard'): Promise<TH
     new THREE.Box3().setFromObject(innerGroup).getCenter(gripCenter)
   }
 
-  // 柄の握り手を原点(0,0,0)にシフト
-  innerGroup.position.set(-gripCenter.x, -gripCenter.y, -gripCenter.z)
+  // 握り手の中心: 鍔（ツバ）のすぐ後ろ（約0.4m手元側）を原点に設定
+  const handHoldX = tsubaFound ? tsubaX - 0.45 : gripCenter.x
+  innerGroup.position.set(-handHoldX, -gripCenter.y, -gripCenter.z)
 
-  // 元のOBJはX軸方向に伸びているため、Z軸回りに90度回転させて刃先を上向き(+Y)にする
-  // これにより、手の向きに合わせて回転させやすくなる
+  // 元のOBJはX軸方向（+Xが刃先、-Xが柄尻）なので、Z軸回りに+90度回転させて刃先を真上(+Y)にする
   const orientedContainer = new THREE.Group()
   orientedContainer.add(innerGroup)
-  orientedContainer.rotation.z = Math.PI / 2 // +X方向 ➔ +Y方向（上向き）
+  orientedContainer.rotation.z = Math.PI / 2
 
-  // スケール調整（画面上で見栄えのよいサイズ: 全長約0.9〜1.1m相当）
+  // 基準スケール（実寸サイズ感: 全長約0.95m〜1.4m）
   const totalBox = new THREE.Box3().setFromObject(orientedContainer)
   const totalSize = new THREE.Vector3()
   totalBox.getSize(totalSize)
