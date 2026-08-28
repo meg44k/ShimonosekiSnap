@@ -239,7 +239,11 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
           if (captureRequestedRef.current) {
             captureRequestedRef.current = false
             try {
-              const photoDataUrl = captureComposite(video, renderer.domElement)
+              const photoDataUrl = captureComposite(
+                video,
+                renderer.domElement,
+                facingMode === 'user',
+              )
               onCapture(photoDataUrl)
             } catch (err) {
               console.error('[GanryuCameraView] Capture error:', err)
