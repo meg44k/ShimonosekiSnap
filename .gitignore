@@ -25,3 +25,6 @@ dist-ssr
 
 # Raw Sketchfab downloads (only the processed .glb is committed)
 src/assets/humpback_whale_swimming/
+
+# SDD (subagent-driven-development) scratch workspace
+.superpowers/

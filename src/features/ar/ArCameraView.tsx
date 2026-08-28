@@ -38,12 +38,19 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
     mindarRef.current = mindarThree
     const { renderer, scene, camera } = mindarThree
     renderer.localClippingEnabled = true
+    renderer.shadowMap.enabled = true
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
     const anchor = mindarThree.addAnchor(0)
     const effectGroup = new THREE.Group()
     effectGroup.visible = false
     anchor.group.add(effectGroup)
     let modelUpdate: ((deltaSeconds: number) => void) | null = null
+    // markerObjectはeffectGroup(毎フレーム位置/回転が上書きされる)の外、
+    // アンカー直下に追加する。モデル本体とは独立してマーカー座標系に
+    // 固定された要素(例: 水しぶき)を描画するための仕組み。
+    let markerObject: THREE.Object3D | null = null
+    let modelMarkerUpdate: ((deltaSeconds: number, elapsedMs: number) => void) | null = null
     // clippingPlanesはアンカー(マーカー)のローカル座標系で定義されるため、
     // 毎フレームアンカーのワールド行列を掛けてワールド座標系に変換したものを
     // マテリアルに割り当てる(worldClippingPlanesは参照を維持したまま
@@ -70,6 +77,11 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
         if (cancelled) return
         effectGroup.add(model.object)
         modelUpdate = model.update ?? null
+        if (model.markerObject) {
+          markerObject = model.markerObject
+          anchor.group.add(markerObject)
+        }
+        modelMarkerUpdate = model.markerUpdate ?? null
         if (model.clippingPlanes && model.clippingPlanes.length > 0) {
           localClippingPlanes = model.clippingPlanes
           worldClippingPlanes = localClippingPlanes.map(() => new THREE.Plane())
@@ -117,6 +129,9 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
               }
             }
           }
+          if (targetVisible) {
+            modelMarkerUpdate?.(deltaSeconds, now - startedAt)
+          }
           renderer.render(scene, camera)
 
           if (captureRequestedRef.current) {
@@ -161,6 +176,21 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
           }
         }
       })
+      if (markerObject) {
+        anchor.group.remove(markerObject)
+        markerObject.traverse((object) => {
+          if (object instanceof THREE.Sprite) {
+            object.material.map?.dispose()
+            object.material.dispose()
+          } else if (object instanceof THREE.Mesh) {
+            object.geometry.dispose()
+            const materials = Array.isArray(object.material) ? object.material : [object.material]
+            for (const material of materials) {
+              material.dispose()
+            }
+          }
+        })
+      }
       mindarRef.current = null
     }
   }, [location, onError])

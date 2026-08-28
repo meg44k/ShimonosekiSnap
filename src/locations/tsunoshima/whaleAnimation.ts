@@ -13,7 +13,10 @@ const WAYPOINTS: [number, number, number][] = [
   [0.3203, -0.15, 0],
 ]
 
-const FLIGHT_DURATION_MS = 4000
+// 「チープに見える」フィードバックを受け、駆け足だった動きをゆったりさせて
+// 雄大さを出すため4000から5500に延長した(泳ぎアニメーションの再生速度も
+// animationSpeedを介して同じ比率で緩やかになる)。
+const FLIGHT_DURATION_MS = 5500
 const PAUSE_DURATION_MS = 1500
 export const CYCLE_DURATION_MS = FLIGHT_DURATION_MS + PAUSE_DURATION_MS
 

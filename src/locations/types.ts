@@ -31,11 +31,22 @@ export interface ArTransform {
  * objectの各メッシュのマテリアルに適用する(平面の正の側=描画される側)。
  * 例: 海面の高さに平面を置き、水面より下を描画しないことで
  * 「海から出てくる」ような見た目にする。
+ *
+ * markerObject/markerUpdateも省略可能。objectはArCameraViewが毎フレーム
+ * getTransform()の結果(位置/回転)を適用する「エフェクトグループ」の
+ * 子として追加されるため、objectに含めた要素はモデル本体と一緒に動く。
+ * それとは独立してマーカー座標系に固定された要素(例: モデルが通過した
+ * 場所に留まるエフェクト)を描画したい場合は、markerObjectとして返す。
+ * ArCameraViewはこれをエフェクトグループの外(アンカー直下)に追加し、
+ * markerUpdateをターゲット追跡中は毎フレーム(elapsedMsとともに)呼び出す。
+ * updateと異なり、getTransform().visibleがfalseの間も呼び出され続ける。
  */
 export interface LoadedEffectModel {
   object: THREE.Object3D
   update?: (deltaSeconds: number) => void
   clippingPlanes?: THREE.Plane[]
+  markerObject?: THREE.Object3D
+  markerUpdate?: (deltaSeconds: number, elapsedMs: number) => void
 }
 
 export interface ArEffect {
