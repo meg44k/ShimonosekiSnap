@@ -31,11 +31,11 @@ const BOIL_HZ = 8 // 線のゆらぎの更新頻度(回/秒)
 const BOIL_AMP = 1.6 // ゆらぎの振幅(テクセル)
 const BOIL_CELLS = 6.0 // boil のオフセットを共有する空間セルの分割数(小さいほど広い領域が一緒に動く)
 // 参考イラストは「クリーンな輪郭(シルエット)線 + ごく少数の折れ線」。
-// シルエットは深度の段差(背景との差)で出るので DEPTH は低め=くっきり、
-// 体の丸みに沿った面の陰影を線にしないよう NORMAL は高め=硬い折れだけ拾う。
-const DEPTH_THRESHOLD = 0.08 // 深度エッジのしきい値。低いほど輪郭・ヒレの縁がくっきり
-const NORMAL_THRESHOLD = 0.75 // 法線エッジのしきい値。高いほど「縁取り」寄り(曲面の形の線を出さない)
-const HALO_RADIUS = 1.6 // ハローの膨張半径(テクセル)。細いほど線画的
+// シルエットは深度勾配ではなく「隣が背景か」で判定する(シェーダー参照)ので
+// 丸い体に偽の等高線が出ない。内側は法線の硬い不連続だけを線にする。
+const DEPTH_THRESHOLD = 0.08 // 現在シェーダー未使用(背景有無でシルエット判定するため)。将来用に残置
+const NORMAL_THRESHOLD = 0.7 // 法線エッジのしきい値。高いほど内側の線が減る(硬い折れだけ)
+const HALO_RADIUS = 1.8 // ハローの膨張半径(テクセル)。線の外側の暗いにじみの太さ
 const HALO_ALPHA = 0.34 // ハローの不透明度
 const LINE_COLOR = new THREE.Color('#eaf6ff') // 線の色(ほぼ白)
 const HALO_COLOR = new THREE.Color('#0a1a2a') // ハローの色(暗い紺)
@@ -95,39 +95,46 @@ const EDGE_FRAG = /* glsl */ `
     ) - 0.5) * uBoilAmp * texel;
     vec2 uv = vUv + boil;
 
-    float d[9];
+    // 深度テクスチャは背景(クジラなし)が 1.0 でクリアされている。
+    // 「輪郭(縁取り)」= 中心がクジラ上で、3x3 の隣に背景がある画素。
+    // 深度勾配のしきい値ではなく背景の有無で判定するので、丸い体の面が
+    // 視線とすれすれになる所に出ていた偽の等高線(前バージョンで eDepth が
+    // 拾っていた「体の形の線」)が出なくなる。
+    float BG = 0.9999;
+    float rawC = texture2D(tDepth, uv).r;
+    float fg = step(rawC, BG); // 中心はクジラの上か
+
     vec3 n[9];
+    float bgNeighbor = 0.0;
     int k = 0;
     for (int y = -1; y <= 1; y++) {
       for (int x = -1; x <= 1; x++) {
         vec2 o = vec2(float(x), float(y)) * texel;
-        d[k] = linearizeDepth(texture2D(tDepth, uv + o).r);
         n[k] = texture2D(tNormal, uv + o).rgb * 2.0 - 1.0;
+        bgNeighbor = max(bgNeighbor, step(BG, texture2D(tDepth, uv + o).r));
         k++;
       }
     }
+    float silhouette = fg * bgNeighbor;
 
-    float gxD = d[0] + 2.0 * d[3] + d[6] - d[2] - 2.0 * d[5] - d[8];
-    float gyD = d[0] + 2.0 * d[1] + d[2] - d[6] - 2.0 * d[7] - d[8];
-    float depthEdge = length(vec2(gxD, gyD));
-
+    // 内側の線は「本物の折れ(法線の不連続)」だけ。なめらかな曲面には出ない。
     vec3 gxN = n[0] + 2.0 * n[3] + n[6] - n[2] - 2.0 * n[5] - n[8];
     vec3 gyN = n[0] + 2.0 * n[1] + n[2] - n[6] - 2.0 * n[7] - n[8];
     float normalEdge = max(length(gxN), length(gyN));
+    float eNormal = fg * smoothstep(uNormalThreshold, uNormalThreshold * 2.0, normalEdge);
 
-    float eDepth = smoothstep(uDepthThreshold, uDepthThreshold * 2.0, depthEdge);
-    float eNormal = smoothstep(uNormalThreshold, uNormalThreshold * 2.0, normalEdge);
-    float lineCore = max(eDepth, eNormal);
+    float lineCore = max(silhouette, eNormal);
 
-    // ハロー: シルエット(中心との深度差)を広い半径で拾って膨張させる
-    float halo = 0.0;
+    // ハロー: 中心が背景で、少し内側にクジラがある画素。白い線の外側に
+    // 暗いにじみを出して明るい写真の上でも視認できるようにする。
+    float bgC = step(BG, rawC);
+    float haloOut = 0.0;
     for (int i = 0; i < 8; i++) {
       float a = float(i) / 8.0 * 6.2831853;
       vec2 o = vec2(cos(a), sin(a)) * texel * uHaloRadius;
-      float dd = linearizeDepth(texture2D(tDepth, uv + o).r);
-      halo = max(halo, step(uDepthThreshold, abs(dd - d[4])));
+      haloOut = max(haloOut, step(texture2D(tDepth, uv + o).r, BG));
     }
-    halo = max(halo, lineCore);
+    float halo = max(lineCore, bgC * haloOut);
 
     vec3 rgb = mix(uHaloColor, uLineColor, lineCore);
     float alpha = clamp(max(lineCore, halo * uHaloAlpha), 0.0, 1.0);

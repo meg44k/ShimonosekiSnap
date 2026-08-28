@@ -3,12 +3,8 @@ import { getLocation } from './locations'
 import type { LocationConfig } from './locations/types'
 import { GuidancePage, MODEL_CREDIT } from './pages/GuidancePage'
 import { parseRoute } from './router'
+import { BUILD_TAG } from './buildTag'
 import './App.css'
-
-// 実機で「今どのビルドを見ているか」を確認するための目印。
-// コードを変えたらこの値を1つ上げる。実機で数字が変わっていなければ、
-// 新しいコードがその端末に届いていない(要フルリロード / キャッシュ / dev鯖再起動)。
-const BUILD_TAG = 'b7'
 
 const ArCameraView = lazy(() =>
   import('./features/ar/ArCameraView').then((module) => ({ default: module.ArCameraView })),
