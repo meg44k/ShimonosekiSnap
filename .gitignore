@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Raw Sketchfab downloads (only the processed .glb is committed)
+src/assets/humpback_whale_swimming/
