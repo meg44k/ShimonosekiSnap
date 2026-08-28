@@ -157,7 +157,7 @@ export function mapVideoToScreen(
 }
 
 /**
- * 手首・肘・親指・人差し指・小指から、手のひら（拳）の位置・把持状態・構え角度・サイズを計算
+ * 手首・肘・親指・人差し指・小指から、手に対して垂直に刀を立てる角度・位置・サイズを計算
  */
 function extractHandPose(
   shoulder: NormalizedLandmark | undefined,
@@ -222,7 +222,7 @@ function extractHandPose(
   const elbowCoord = mapVideoToScreen(elbow, viewport)
   const wristCoord = mapVideoToScreen(wrist, viewport)
 
-  // 3. 幾何学的角度拘束
+  // 3. 腕・手のベクトル（肘 ➔ 拳）
   let armDx = palmCoord.pixelX - elbowCoord.pixelX
   let armDy = -(palmCoord.pixelY - elbowCoord.pixelY) // Y上向き
 
@@ -230,13 +230,29 @@ function extractHandPose(
     const indexCoord = mapVideoToScreen(index, viewport)
     const handDx = indexCoord.pixelX - wristCoord.pixelX
     const handDy = -(indexCoord.pixelY - wristCoord.pixelY)
-    armDx = armDx * 0.25 + handDx * 0.75
-    armDy = armDy * 0.25 + handDy * 0.75
+    armDx = armDx * 0.3 + handDx * 0.7
+    armDy = armDy * 0.3 + handDy * 0.7
   }
 
+  // 腕の進行方向（ラジアン）
   const armAngle = Math.atan2(armDy, armDx)
-  const angleOffset = isLeftHand ? -Math.PI * 0.04 : Math.PI * 0.04
-  const targetAngle = armAngle - Math.PI / 2 + angleOffset
+
+  // 刀を「手・腕に対して垂直（90度立てる）」に向ける角度計算:
+  // 刀の基準モデルは真上(+Y, 90度)を向いている。
+  // 腕の方向に対して垂直に刀を立てるため、腕の向きから90度直角方向に回転させる
+  let targetAngle: number
+  if (isLeftHand) {
+    // 左手: 腕の外側/上向きに垂直に立てる
+    targetAngle = armDx < 0 ? armAngle - Math.PI / 2 : armAngle + Math.PI / 2
+  } else {
+    // 右手: 腕の外側/上向きに垂直に立てる
+    targetAngle = armDx > 0 ? armAngle + Math.PI / 2 : armAngle - Math.PI / 2
+  }
+
+  // 上向きの自然な傾き（常に空を向く方向へ補正）
+  if (Math.cos(targetAngle) < -0.3 && armDy > 0) {
+    targetAngle = armAngle + (isLeftHand ? -Math.PI / 2 : Math.PI / 2)
+  }
 
   // 4. スケール
   const armLenPx = Math.hypot(wristCoord.pixelX - elbowCoord.pixelX, wristCoord.pixelY - elbowCoord.pixelY)
@@ -291,7 +307,7 @@ export function estimateHandPoses(
       threeY: -0.25,
       pixelX: viewport.containerWidth * 0.7,
       pixelY: viewport.containerHeight * 0.65,
-      angle: -Math.PI / 6,
+      angle: Math.PI / 12, // 自然な立て構え
       scale: 1.0,
       isGrasping: false,
       graspConfidence: 0,
@@ -303,8 +319,10 @@ export function estimateHandPoses(
       threeY: -0.25,
       pixelX: viewport.containerWidth * 0.3,
       pixelY: viewport.containerHeight * 0.65,
-      angle: Math.PI / 6,
+      angle: -Math.PI / 12,
       scale: 1.0,
+      isGrasping: false,
+      graspConfidence: 0,
       score: 0,
     },
     hasPerson: false,
@@ -321,6 +339,12 @@ export function estimateHandPoses(
     }
 
     const landmarks = result.landmarks[0]
+    // 11: left_shoulder, 12: right_shoulder
+    // 13: left_elbow, 14: right_elbow
+    // 15: left_wrist, 16: right_wrist
+    // 17: left_pinky, 18: right_pinky
+    // 19: left_index, 20: right_index
+    // 21: left_thumb, 22: right_thumb
     const leftShoulder = landmarks[11]
     const rightShoulder = landmarks[12]
     const leftElbow = landmarks[13]

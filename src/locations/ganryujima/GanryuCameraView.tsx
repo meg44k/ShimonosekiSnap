@@ -206,7 +206,7 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
             } else {
               const floatY = Math.sin(nowMs / 800) * 0.02
               rightKatanaGroup.position.set(screenAspect * 0.45, -0.3 + floatY, 2)
-              rightKatanaGroup.rotation.z = -Math.PI / 6
+              rightKatanaGroup.rotation.z = Math.PI / 12
               rightKatanaGroup.scale.set(0.9, 0.9, 0.9)
             }
           } else {
@@ -224,7 +224,7 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
             } else if (stanceMode === 'dual' || stanceMode === 'left') {
               const floatY = Math.sin((nowMs + 400) / 800) * 0.02
               leftKatanaGroup.position.set(-screenAspect * 0.45, -0.3 + floatY, 2)
-              leftKatanaGroup.rotation.z = Math.PI / 6
+              leftKatanaGroup.rotation.z = -Math.PI / 12
               leftKatanaGroup.scale.set(-0.75, 0.75, 0.75)
             } else {
               leftKatanaGroup.visible = false
