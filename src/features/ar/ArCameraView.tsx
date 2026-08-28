@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 // @ts-expect-error mind-ar has no bundled TypeScript types
 import { MindARThree } from 'mind-ar/dist/mindar-image-three.prod.js'
 import * as THREE from 'three'
-import type { ArTransform, LocationConfig } from '../../locations/types'
+import type { ArTransform, ImageTargetLocationConfig } from '../../locations/types'
 import { captureComposite } from './captureComposite'
 
 interface ArCameraViewProps {
-  location: LocationConfig
+  location: ImageTargetLocationConfig
   onCapture: (photoDataUrl: string) => void
   onClose: () => void
   onError: (message: string) => void
