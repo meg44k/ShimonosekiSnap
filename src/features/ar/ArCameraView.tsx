@@ -4,6 +4,7 @@ import { MindARThree } from 'mind-ar/dist/mindar-image-three.prod.js'
 import * as THREE from 'three'
 import type { ArTransform, LocationConfig } from '../../locations/types'
 import { captureComposite } from './captureComposite'
+import { createLineArtRenderer, WHALE_LINEART_LAYER, type LineArtRenderer } from './lineArtRenderer'
 
 interface ArCameraViewProps {
   location: LocationConfig
@@ -36,10 +37,18 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
       uiError: 'no',
     })
     mindarRef.current = mindarThree
+    let lineArt: LineArtRenderer | null = null
+    let resizeCleanup: (() => void) | null = null
     const { renderer, scene, camera } = mindarThree
     renderer.localClippingEnabled = true
-    renderer.shadowMap.enabled = true
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    renderer.autoClear = false
+
+    if (!renderer.capabilities.isWebGL2) {
+      onError('お使いのブラウザはこのエフェクトに対応していません(WebGL2が必要です)')
+      return () => {
+        mindarRef.current = null
+      }
+    }
 
     const anchor = mindarThree.addAnchor(0)
     const effectGroup = new THREE.Group()
@@ -76,6 +85,19 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
       .then((model) => {
         if (cancelled) return
         effectGroup.add(model.object)
+        if (model.lineArt) {
+          model.object.traverse((child) => {
+            // Sprite(スパークル)は線画化しない。Mesh/SkinnedMesh だけ隔離する。
+            if (child instanceof THREE.Mesh) {
+              child.layers.set(WHALE_LINEART_LAYER)
+            }
+          })
+          lineArt = createLineArtRenderer()
+          const container = containerRef.current
+          if (container) {
+            lineArt.setSize(container.clientWidth, container.clientHeight, window.devicePixelRatio)
+          }
+        }
         modelUpdate = model.update ?? null
         if (model.markerObject) {
           markerObject = model.markerObject
@@ -94,6 +116,7 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
             }
           })
         }
+        lineArt?.setClippingPlanes(worldClippingPlanes.length > 0 ? worldClippingPlanes : null)
       })
       .catch((error) => {
         console.error('[ar] failed to load effect model', error)
@@ -109,6 +132,14 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
           return
         }
         setReady(true)
+        const handleResize = () => {
+          const container = containerRef.current
+          if (container && lineArt) {
+            lineArt.setSize(container.clientWidth, container.clientHeight, window.devicePixelRatio)
+          }
+        }
+        window.addEventListener('resize', handleResize)
+        resizeCleanup = () => window.removeEventListener('resize', handleResize)
         let lastFrameAt = performance.now()
         renderer.setAnimationLoop(() => {
           const now = performance.now()
@@ -132,7 +163,23 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
           if (targetVisible) {
             modelMarkerUpdate?.(deltaSeconds, now - startedAt)
           }
-          renderer.render(scene, camera)
+
+          // 画面を1回だけクリア(autoClear=false のため手動)
+          renderer.setRenderTarget(null)
+          renderer.setClearColor(0x000000, 0)
+          renderer.clear(true, true, true)
+
+          if (lineArt) {
+            // 法線プリパス → エッジ検出パス(線画のクジラを画面へ)
+            lineArt.renderLineArt(renderer, scene, camera, now - startedAt)
+            // オーバーレイ: レイヤー0(スパークル・水しぶき)を上に重ねる
+            renderer.clearDepth()
+            camera.layers.set(0)
+            renderer.render(scene, camera)
+            camera.layers.set(0)
+          } else {
+            renderer.render(scene, camera)
+          }
 
           if (captureRequestedRef.current) {
             captureRequestedRef.current = false
@@ -191,6 +238,8 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
           }
         })
       }
+      resizeCleanup?.()
+      lineArt?.dispose()
       mindarRef.current = null
     }
   }, [location, onError])
