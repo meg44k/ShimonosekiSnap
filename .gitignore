@@ -8,6 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.npm-cache
 dist
 dist-ssr
 *.local
@@ -22,3 +23,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Raw Sketchfab downloads (only the processed .glb is committed)
+src/assets/humpback_whale_swimming/
+
+# SDD (subagent-driven-development) scratch workspace
+.superpowers/

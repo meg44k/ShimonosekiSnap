@@ -17,6 +17,12 @@ describe('resolveLocation', () => {
     expect(location?.name).toBe('赤間神宮')
   })
 
+  it('returns the location config for yumetower spot', () => {
+    const location = resolveLocation('/spot/yumetower')
+    expect(location?.id).toBe('yumetower')
+    expect(location?.name).toBe('海峡ゆめタワー')
+  })
+
   it('returns the location config for ganryujima spot', () => {
     const location = resolveLocation('/spot/ganryujima')
     expect(location?.id).toBe('ganryujima')
