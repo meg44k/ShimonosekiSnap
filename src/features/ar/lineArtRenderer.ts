@@ -30,10 +30,12 @@ export const WHALE_LINEART_LAYER = 1
 const BOIL_HZ = 8 // 線のゆらぎの更新頻度(回/秒)
 const BOIL_AMP = 1.6 // ゆらぎの振幅(テクセル)
 const BOIL_CELLS = 6.0 // boil のオフセットを共有する空間セルの分割数(小さいほど広い領域が一緒に動く)
-const DEPTH_THRESHOLD = 0.18 // 深度エッジのしきい値(ビュー空間の距離)
-const NORMAL_THRESHOLD = 0.45 // 法線エッジのしきい値(法線ベクトル勾配の長さ)
-const HALO_RADIUS = 2.5 // ハローの膨張半径(テクセル)
-const HALO_ALPHA = 0.5 // ハローの不透明度
+// しきい値を下げるほど、緩やかな面の曲がりや浅い段差も線として拾う=線が増える。
+// 参考イラストのように体の丸みに沿った形の線を出すため低め(法線)に設定。
+const DEPTH_THRESHOLD = 0.1 // 深度エッジのしきい値(ビュー空間の距離)。下げるとヒレ/口などの細い段差も線になる
+const NORMAL_THRESHOLD = 0.18 // 法線エッジのしきい値(法線ベクトル勾配の長さ)。下げると体の曲面に沿った線が増える
+const HALO_RADIUS = 2.0 // ハローの膨張半径(テクセル)
+const HALO_ALPHA = 0.38 // ハローの不透明度。下げると発光の塊感が減り線画寄りになる
 const LINE_COLOR = new THREE.Color('#eaf6ff') // 線の色(ほぼ白)
 const HALO_COLOR = new THREE.Color('#0a1a2a') // ハローの色(暗い紺)
 const RT_SCALE = 1 // 1 未満にするとエッジパスを低解像度化して負荷を下げる
