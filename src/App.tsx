@@ -8,6 +8,11 @@ import './App.css'
 const ArCameraView = lazy(() =>
   import('./features/ar/ArCameraView').then((module) => ({ default: module.ArCameraView })),
 )
+const PersonDetectionCameraView = lazy(() =>
+  import('./locations/yumetower/PersonDetectionCameraView').then((module) => ({
+    default: module.PersonDetectionCameraView,
+  })),
+)
 
 type AppState = 'idle' | 'camera' | 'preview'
 
@@ -98,9 +103,21 @@ function App() {
           </div>
         )}
 
-        {state === 'camera' && (
+        {state === 'camera' && location.cameraMode === 'image-target' && (
           <Suspense fallback={<div className="camera-screen" />}>
             <ArCameraView
+              key={location.id}
+              location={location}
+              onCapture={handleCapture}
+              onClose={() => setState('idle')}
+              onError={handleArError}
+            />
+          </Suspense>
+        )}
+
+        {state === 'camera' && location.cameraMode === 'person-detection' && (
+          <Suspense fallback={<div className="camera-screen" />}>
+            <PersonDetectionCameraView
               key={location.id}
               location={location}
               onCapture={handleCapture}
