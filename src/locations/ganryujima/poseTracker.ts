@@ -2,19 +2,14 @@ import { FilesetResolver, PoseLandmarker, type NormalizedLandmark } from '@media
 
 export interface HandPoseInfo {
   detected: boolean
-  // Three.js 正射影座標系 (-aspect 〜 aspect, -1.0 〜 1.0)
-  threeX: number
-  threeY: number
   // 画面ピクセル座標
   pixelX: number
   pixelY: number
-  // 刀の回転角 (ラジアン)
+  // 刀の回転角 (ラジアン, canvas用)
   angle: number
   // スケール
   scale: number
-  // 把持判定
   isGrasping: boolean
-  graspConfidence: number
   score: number
 }
 
@@ -93,19 +88,14 @@ function extractHandPoseFromLandmarks(
   imageHeight: number,
   isLeftHand: boolean,
 ): HandPoseInfo {
-  const aspect = imageWidth / imageHeight
-
   if (!wrist || !elbow || (wrist.visibility !== undefined && wrist.visibility < 0.2)) {
     return {
       detected: false,
-      threeX: isLeftHand ? -aspect * 0.4 : aspect * 0.4,
-      threeY: -0.25,
       pixelX: isLeftHand ? imageWidth * 0.3 : imageWidth * 0.7,
       pixelY: imageHeight * 0.65,
       angle: isLeftHand ? -Math.PI / 12 : Math.PI / 12,
       scale: 1.0,
       isGrasping: false,
-      graspConfidence: 0,
       score: 0,
     }
   }
@@ -140,20 +130,17 @@ function extractHandPoseFromLandmarks(
   }
 
   const isGrasping = graspSpread < 0.6
-  const graspConfidence = Math.max(0, Math.min(1, (0.75 - graspSpread) * 3))
 
-  // 2. 画像ピクセル座標と Three.js 正射影座標系への変換
+  // 2. 画面ピクセル座標
   const pixelX = palmNorm.x * imageWidth
   const pixelY = palmNorm.y * imageHeight
-  const threeX = (palmNorm.x * 2 - 1) * aspect
-  const threeY = -(palmNorm.y * 2 - 1)
 
   const elbowPixelX = elbow.x * imageWidth
   const elbowPixelY = elbow.y * imageHeight
 
   // 3. 腕・手の方向ベクトル（肘 ➔ 拳）
   let armDx = pixelX - elbowPixelX
-  let armDy = -(pixelY - elbowPixelY) // Y上向き
+  let armDy = pixelY - elbowPixelY
 
   if (index && (index.visibility === undefined || index.visibility > 0.15)) {
     const indexPixelX = index.x * imageWidth
@@ -161,7 +148,7 @@ function extractHandPoseFromLandmarks(
     const wristPixelX = wrist.x * imageWidth
     const wristPixelY = wrist.y * imageHeight
     const handDx = indexPixelX - wristPixelX
-    const handDy = -(indexPixelY - wristPixelY)
+    const handDy = indexPixelY - wristPixelY
     armDx = armDx * 0.3 + handDx * 0.7
     armDy = armDy * 0.3 + handDy * 0.7
   }
@@ -169,34 +156,29 @@ function extractHandPoseFromLandmarks(
   // 腕の方向
   const armAngle = Math.atan2(armDy, armDx)
 
-  // 刀を「手・腕に対して垂直に立てる」角度計算
-  let targetAngle: number
+  // 刀の垂直角度計算（手に対して垂直に立てる）
+  // 刀の元画像は直立(上向き)なので、腕の向きに応じた回転角を付与
+  let targetAngle = armAngle
   if (isLeftHand) {
-    targetAngle = armDx < 0 ? armAngle - Math.PI / 2 : armAngle + Math.PI / 2
+    targetAngle = armDx < 0 ? armAngle + Math.PI : armAngle
   } else {
-    targetAngle = armDx > 0 ? armAngle + Math.PI / 2 : armAngle - Math.PI / 2
+    targetAngle = armDx > 0 ? armAngle : armAngle + Math.PI
   }
 
-  if (Math.cos(targetAngle) < -0.3 && armDy > 0) {
-    targetAngle = armAngle + (isLeftHand ? -Math.PI / 2 : Math.PI / 2)
-  }
-
-  // 4. スケール（腕の長さに比例）
+  // 4. スケール（腕の長さに比例して刀の大きさを決定）
   const wristPixelX = wrist.x * imageWidth
   const wristPixelY = wrist.y * imageHeight
   const armLenPx = Math.hypot(wristPixelX - elbowPixelX, wristPixelY - elbowPixelY)
-  const targetScale = Math.max(0.45, Math.min(2.2, armLenPx / (imageHeight * 0.22)))
+  // 刀の全長が腕の長さの約2.5〜3.0倍程度になるスケール
+  const targetScale = Math.max(0.4, Math.min(2.5, (armLenPx * 2.8) / 784))
 
   return {
     detected: true,
-    threeX,
-    threeY,
     pixelX,
     pixelY,
     angle: targetAngle,
     scale: targetScale,
     isGrasping,
-    graspConfidence,
     score: wrist.visibility ?? 0.85,
   }
 }
@@ -210,31 +192,24 @@ export async function detectPoseOnImage(
   height: number,
 ): Promise<PoseTrackingResult> {
   const landmarker = await getImagePoseLandmarker()
-  const aspect = width / height
 
   const defaultResult: PoseTrackingResult = {
     rightHand: {
       detected: false,
-      threeX: aspect * 0.45,
-      threeY: -0.25,
       pixelX: width * 0.7,
       pixelY: height * 0.65,
       angle: Math.PI / 12,
-      scale: 1.0,
+      scale: (height * 0.5) / 784,
       isGrasping: false,
-      graspConfidence: 0,
       score: 0,
     },
     leftHand: {
       detected: false,
-      threeX: -aspect * 0.45,
-      threeY: -0.25,
       pixelX: width * 0.3,
       pixelY: height * 0.65,
       angle: -Math.PI / 12,
-      scale: 1.0,
+      scale: (height * 0.5) / 784,
       isGrasping: false,
-      graspConfidence: 0,
       score: 0,
     },
     hasPerson: false,
