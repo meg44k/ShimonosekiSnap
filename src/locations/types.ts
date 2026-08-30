@@ -76,6 +76,15 @@ export interface PersonDetectionLocationConfig extends BaseLocationConfig {
   cameraMode: 'person-detection'
   overlaySrc: string
   costumeSrc: string
+  brandLabel: string
+  showBrandImage?: boolean
+  costumeLayout: {
+    faceHoleCenterXRatio: number
+    faceHoleCenterYRatio: number
+    faceHoleWidthRatio: number
+    faceScale: number
+  }
+  costumeTransparentSeeds?: readonly { xRatio: number; yRatio: number }[]
   detectionThreshold: number
 }
 

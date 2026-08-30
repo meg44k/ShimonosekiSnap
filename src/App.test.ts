@@ -11,6 +11,12 @@ describe('resolveLocation', () => {
     expect(location?.id).toBe('tsunoshima')
   })
 
+  it('returns the karato face-filter config', () => {
+    const location = resolveLocation('/spot/karato')
+    expect(location?.id).toBe('karato')
+    expect(location?.cameraMode).toBe('person-detection')
+  })
+
   it('returns null for an unknown spot id', () => {
     expect(resolveLocation('/spot/doesnotexist')).toBeNull()
   })
