@@ -1,5 +1,6 @@
-// 火の山「動く夜景」— 平面版。マーカー(印刷パネル)の上に、色補正した夜景写真を
-// 1 枚貼り、その上で光と動きだけを高品質に見せる。奥行きレイヤー分割・視差は持たない。
+// 火の山「動く夜景」— AR オーバーレイ版。カメラに映る実際の印刷パネルの上に、
+// 「光と動き」だけを加算合成で重ねる(写真そのものは置き換えない)。奥行きレイヤー
+// 分割・視差は持たない。写真のデコードは光源の位置と色を求めるためだけに使い、表示はしない。
 // 発光は写真ピクセルを直接光らせず、輝度から抽出した実際の光位置に生成スプライトを置く。
 
 import * as THREE from 'three'
@@ -17,12 +18,7 @@ import {
   sampleSpline,
   STRAIT_PATH,
 } from './sceneTrace'
-import {
-  createAfterglowTexture,
-  createGlowTexture,
-  createGrainTexture,
-  createVignetteTexture,
-} from './textures'
+import { createAfterglowTexture, createGlowTexture } from './textures'
 
 /** 処理に使う写真の最大幅(px)。元画像が上回る場合は縮小 */
 const WORK_MAX_WIDTH = 1280
@@ -176,11 +172,10 @@ export function buildNightScene(
   const decoded = decodeAndGrade(image)
   const glowTex = createGlowTexture(128)
 
-  // 1. 色補正した写真 -------------------------------------------------
-  root.add(overlayPlane(photoTexture(decoded.gradedCanvas), 1, MARKER_ASPECT, 1, false, 0))
-
-  // 2. ソフトブルーム(写真の明部をぼかして加算) --------------------
-  root.add(overlayPlane(bloomTexture(decoded), 1, MARKER_ASPECT, 0.4, true, 1))
+  // 1. ソフトブルーム(写真の明部をぼかして実映像に加算) ------------
+  //    写真は表示しない。明るい部分だけを取り出してぼかし、実パネルの
+  //    光がふわっと滲むように見せる。opacity は低め(実映像に足すため)。
+  root.add(overlayPlane(bloomTexture(decoded), 1, MARKER_ASPECT, 0.28, true, 1))
 
   // 3. 実光源のグロー ----------------------------------------------
   const glows: GlowHandle[] = []
@@ -234,19 +229,12 @@ export function buildNightScene(
   carSprite.renderOrder = 3
   root.add(carSprite)
 
-  // 7. 前面オーバーレイ -----------------------------------------
-  const afterglowTex = createAfterglowTexture()
-  const afterglow = overlayPlane(afterglowTex, 1.02, MARKER_ASPECT * 0.5, 0, true, 5)
+  // 7. 水平線付近の残照(加算・空の呼吸で強弱) --------------------
+  //    実映像に足す唯一の「大気」表現。グレイン/ヴィネットは実カメラ映像に
+  //    重ねると不自然(センサーノイズと二重・パネル縁だけ暗くなる)ため持たない。
+  const afterglow = overlayPlane(createAfterglowTexture(), 1.02, MARKER_ASPECT * 0.5, 0, true, 5)
   afterglow.position.set(0, MARKER_ASPECT * 0.1, 0)
   root.add(afterglow)
-
-  const grainTex = createGrainTexture(256)
-  grainTex.repeat.set(2.6, 2.6)
-  const grain = overlayPlane(grainTex, 1.05, MARKER_ASPECT * 1.05, 0.045, true, 6)
-  root.add(grain)
-
-  const vignetteTex = createVignetteTexture()
-  root.add(overlayPlane(vignetteTex, 1.05, MARKER_ASPECT * 1.05, 0.5, false, 7))
 
   // --- 毎フレーム更新 ------------------------------------------
   function update(elapsedMs: number): void {
@@ -292,9 +280,8 @@ export function buildNightScene(
       carSprite.material.opacity = car.opacity * 0.75
     }
 
-    ;(afterglow.material as THREE.MeshBasicMaterial).opacity = 0.16 + 0.3 * skyBreath(elapsedMs)
+    ;(afterglow.material as THREE.MeshBasicMaterial).opacity = 0.14 + 0.26 * skyBreath(elapsedMs)
     afterglow.position.x = Math.sin(elapsedMs / 9000) * 0.015
-    grainTex.offset.set((elapsedMs / 1000) % 1, (elapsedMs / 1370) % 1)
   }
 
   return { object: root, update }
