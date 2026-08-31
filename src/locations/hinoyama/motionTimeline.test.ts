@@ -192,43 +192,31 @@ describe('meteors', () => {
     }
   })
 
-  it('has quiet stretches and busy peaks (a real shower, not a drizzle)', () => {
-    let sawEmpty = false
+  it('runs continuously — at least one meteor active at every moment', () => {
+    for (let ms = 0; ms < CYCLE_MS * 2; ms += 30) {
+      expect(meteors(ms).filter((m) => m.active).length).toBeGreaterThanOrEqual(1)
+    }
+  })
+
+  it('stays modest — never more than a few at once, within the pool', () => {
     let peak = 0
-    for (let ms = 0; ms < CYCLE_MS; ms += 40) {
-      const count = meteors(ms).filter((m) => m.active).length
-      if (count === 0) sawEmpty = true
-      peak = Math.max(peak, count)
-    }
-    expect(sawEmpty).toBe(true)
-    expect(peak).toBeGreaterThanOrEqual(3)
-  })
-
-  it('never exceeds the pool with simultaneously active meteors', () => {
-    for (let ms = 0; ms < CYCLE_MS; ms += 25) {
-      expect(meteors(ms).filter((m) => m.active).length).toBeLessThanOrEqual(METEOR_POOL_SIZE)
-    }
-  })
-
-  it('fires two showers per cycle', () => {
-    // 立ち上がりエッジ(前フレーム 0 本 → 今フレーム >0 本)の回数
-    let edges = 0
-    let prev = 0
     for (let ms = 0; ms < CYCLE_MS; ms += 20) {
-      const count = meteors(ms).filter((m) => m.active).length
-      if (prev === 0 && count > 0) edges++
-      prev = count
+      peak = Math.max(peak, meteors(ms).filter((m) => m.active).length)
     }
-    expect(edges).toBe(2)
+    expect(peak).toBeGreaterThanOrEqual(2)
+    expect(peak).toBeLessThanOrEqual(METEOR_POOL_SIZE)
   })
 
-  it('repeats every cycle', () => {
-    expect(meteors(6_200 + CYCLE_MS)).toEqual(meteors(6_200))
+  it('loops seamlessly (identical state one cycle apart)', () => {
+    for (const ms of [0, 137, 6_200, 15_999, 23_400]) {
+      expect(meteors(ms + CYCLE_MS)).toEqual(meteors(ms))
+    }
   })
 
-  it('marks unused pool slots inactive', () => {
-    const quiet = meteors(12_000) // 群れと群れの間
-    expect(quiet.every((m) => !m.active)).toBe(true)
+  it('leaves the tail of the pool inactive (never fully saturated)', () => {
+    for (let ms = 0; ms < CYCLE_MS; ms += 70) {
+      expect(meteors(ms)[METEOR_POOL_SIZE - 1].active).toBe(false)
+    }
   })
 })
 

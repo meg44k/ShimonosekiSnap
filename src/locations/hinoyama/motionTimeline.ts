@@ -143,13 +143,11 @@ export function carTrail(elapsedMs: number): CarTrailState {
 
 // --- 流星群 --------------------------------------------------------
 
-/** 1 周期あたりの「群れ」の開始時刻(ms)。にぎやかに 2 回 */
-const METEOR_SHOWERS = [3_000, 14_000] as const
-/** 1 群れの本数 */
-const METEOR_SHOWER_SIZE = 5
-/** 群れ内の 1 本ごとの発生間隔 */
-const METEOR_STAGGER_MS = 300
-/** 流星 1 本の寿命。長めに取り、そのぶん軌道もやや長くして「少し遅く」する */
+/** 流星が湧く間隔。CYCLE_MS を割り切る値にしてループの継ぎ目をなくす */
+const METEOR_INTERVAL_MS = 600
+/** 1 周期あたりの流星本数 */
+const METEOR_PER_CYCLE = CYCLE_MS / METEOR_INTERVAL_MS
+/** 流星 1 本の寿命。長めに取り、軌道もやや長くして「少し遅く」する */
 const METEOR_DUR_MS = 1_700
 /** 同時に扱う最大本数(nightSceneModel のメッシュプールと揃える) */
 export const METEOR_POOL_SIZE = 6
@@ -167,27 +165,24 @@ export interface MeteorState {
 const INACTIVE_METEOR: MeteorState = { active: false, pathIndex: 0, progress: 0, intensity: 0 }
 
 /**
- * 固定長 METEOR_POOL_SIZE の配列を返す。認識のたびに CYCLE_MS 周期で
- * 2 回の群れが頭出しされる。決定的(乱数なし)。
+ * 固定長 METEOR_POOL_SIZE の配列を返す。流星は METEOR_INTERVAL_MS ごとに
+ * 絶えず湧き続ける(静かな時間帯なし)。決定的(乱数なし)、CYCLE_MS で
+ * 継ぎ目なくループする。
  */
 export function meteors(elapsedMs: number, pathCount = 10): MeteorState[] {
   const out: MeteorState[] = []
-  for (let showerIndex = 0; showerIndex < METEOR_SHOWERS.length; showerIndex++) {
-    const showerStart = METEOR_SHOWERS[showerIndex]
-    for (let i = 0; i < METEOR_SHOWER_SIZE; i++) {
-      const phase = mod(elapsedMs - showerStart - i * METEOR_STAGGER_MS, CYCLE_MS)
-      if (phase > METEOR_DUR_MS) continue
-      const p = phase / METEOR_DUR_MS
-      // 立ち上がり 15% / 減衰は残り。末端でゼロ。
-      const intensity = clamp01(p / 0.15) * clamp01((1 - p) / 0.55)
-      out.push({
-        active: true,
-        pathIndex: (showerIndex * 7 + i * 3) % pathCount,
-        progress: p,
-        intensity,
-      })
-      if (out.length === METEOR_POOL_SIZE) break
-    }
+  // 直近に湧いた数本ぶんだけ見れば足りる(寿命 < 間隔 * 数本)
+  const newest = Math.floor(elapsedMs / METEOR_INTERVAL_MS)
+  const lookback = Math.ceil(METEOR_DUR_MS / METEOR_INTERVAL_MS) + 1
+  for (let k = newest; k > newest - lookback; k--) {
+    const phase = elapsedMs - k * METEOR_INTERVAL_MS
+    if (phase < 0 || phase > METEOR_DUR_MS) continue
+    const p = phase / METEOR_DUR_MS
+    // 立ち上がり 15% / 減衰は残り。末端でゼロ。
+    const intensity = clamp01(p / 0.15) * clamp01((1 - p) / 0.55)
+    // k を周期本数で畳んでからパスを割り当てる(ループの継ぎ目でも連続)
+    const cycleK = ((k % METEOR_PER_CYCLE) + METEOR_PER_CYCLE) % METEOR_PER_CYCLE
+    out.push({ active: true, pathIndex: (cycleK * 3) % pathCount, progress: p, intensity })
     if (out.length === METEOR_POOL_SIZE) break
   }
   while (out.length < METEOR_POOL_SIZE) out.push(INACTIVE_METEOR)
