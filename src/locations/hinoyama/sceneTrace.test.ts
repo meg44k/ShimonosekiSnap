@@ -4,6 +4,7 @@ import {
   CITY_LIGHT_REGIONS,
   imageToMarker,
   MARKER_ASPECT,
+  METEOR_PATHS,
   mulberry32,
   pointInPolygon,
   sampleSpline,
@@ -26,6 +27,35 @@ describe('imageToMarker', () => {
     const [x, y] = imageToMarker(1, 1)
     expect(x).toBeCloseTo(0.5, 6)
     expect(y).toBeCloseTo(-MARKER_ASPECT / 2, 6)
+  })
+})
+
+describe('METEOR_PATHS', () => {
+  it('provides a handful of distinct trajectories', () => {
+    expect(METEOR_PATHS.length).toBeGreaterThanOrEqual(8)
+  })
+
+  it('keeps every path inside the sky region (above the ridge, v <= 0.42)', () => {
+    for (const { from, to } of METEOR_PATHS) {
+      for (const [u, v] of [from, to]) {
+        expect(u).toBeGreaterThanOrEqual(0)
+        expect(u).toBeLessThanOrEqual(1)
+        expect(v).toBeGreaterThanOrEqual(0)
+        expect(v).toBeLessThanOrEqual(0.42)
+      }
+    }
+  })
+
+  it('has a real direction (start and end differ)', () => {
+    for (const { from, to } of METEOR_PATHS) {
+      expect(Math.hypot(to[0] - from[0], to[1] - from[1])).toBeGreaterThan(0.1)
+    }
+  })
+
+  it('streaks downward (meteors fall: end v is below start v)', () => {
+    for (const { from, to } of METEOR_PATHS) {
+      expect(to[1]).toBeGreaterThan(from[1])
+    }
   })
 })
 

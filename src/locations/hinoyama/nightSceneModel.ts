@@ -6,7 +6,16 @@
 import * as THREE from 'three'
 import { gradeImageData, NIGHT_GRADE } from './imageGrade'
 import { extractLightPoints, rgbaToLuma } from './lightField'
-import { boats, beacon, bridgeShimmer, carTrail, skyBreath, twinkle } from './motionTimeline'
+import {
+  boats,
+  beacon,
+  bridgeShimmer,
+  carTrail,
+  meteors,
+  METEOR_POOL_SIZE,
+  skyBreath,
+  twinkle,
+} from './motionTimeline'
 import {
   BRIDGE_BEACON_UV,
   BRIDGE_PATH,
@@ -14,11 +23,12 @@ import {
   FOREGROUND_ROAD_PATH,
   imageToMarker,
   MARKER_ASPECT,
+  METEOR_PATHS,
   pointInPolygon,
   sampleSpline,
   STRAIT_PATH,
 } from './sceneTrace'
-import { createAfterglowTexture, createGlowTexture } from './textures'
+import { createAfterglowTexture, createGlowTexture, createMeteorTexture } from './textures'
 
 /** 処理に使う写真の最大幅(px)。元画像が上回る場合は縮小 */
 const WORK_MAX_WIDTH = 1280
@@ -236,6 +246,32 @@ export function buildNightScene(
   afterglow.position.set(0, MARKER_ASPECT * 0.1, 0)
   root.add(afterglow)
 
+  // 8. 流星群(空の領域を斜めに流れる、ピンク→水色の筋) -----------
+  const meteorTex = createMeteorTexture()
+  const meteorMeshes: THREE.Mesh[] = []
+  for (let i = 0; i < METEOR_POOL_SIZE; i++) {
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        map: meteorTex,
+        transparent: true,
+        opacity: 0,
+        depthTest: false,
+        depthWrite: false,
+        toneMapped: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    )
+    mesh.renderOrder = 5
+    mesh.visible = false
+    root.add(mesh)
+    meteorMeshes.push(mesh)
+  }
+  /** 頭から尾までの軌道長さの割合 */
+  const METEOR_TAIL = 0.32
+  /** 筋の太さ(マーカー幅=1 基準) */
+  const METEOR_THICKNESS = 0.006
+
   // --- 毎フレーム更新 ------------------------------------------
   function update(elapsedMs: number): void {
     for (const glow of glows) {
@@ -282,6 +318,29 @@ export function buildNightScene(
 
     ;(afterglow.material as THREE.MeshBasicMaterial).opacity = 0.14 + 0.26 * skyBreath(elapsedMs)
     afterglow.position.x = Math.sin(elapsedMs / 9000) * 0.015
+
+    meteors(elapsedMs, METEOR_PATHS.length).forEach((m, i) => {
+      const mesh = meteorMeshes[i]
+      if (!m.active) {
+        mesh.visible = false
+        return
+      }
+      const path = METEOR_PATHS[m.pathIndex]
+      const headT = m.progress
+      const tailT = Math.max(0, m.progress - METEOR_TAIL)
+      const hu = path.from[0] + (path.to[0] - path.from[0]) * headT
+      const hv = path.from[1] + (path.to[1] - path.from[1]) * headT
+      const tu = path.from[0] + (path.to[0] - path.from[0]) * tailT
+      const tv = path.from[1] + (path.to[1] - path.from[1]) * tailT
+      const [hx, hy] = imageToMarker(hu, hv)
+      const [tx, ty] = imageToMarker(tu, tv)
+      const len = Math.hypot(hx - tx, hy - ty) + 0.004
+      mesh.visible = true
+      mesh.position.set((hx + tx) / 2, (hy + ty) / 2, 0)
+      mesh.rotation.z = Math.atan2(hy - ty, hx - tx)
+      mesh.scale.set(len, METEOR_THICKNESS, 1)
+      ;(mesh.material as THREE.MeshBasicMaterial).opacity = m.intensity
+    })
   }
 
   return { object: root, update }

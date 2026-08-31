@@ -141,6 +141,59 @@ export function carTrail(elapsedMs: number): CarTrailState {
   return { active: true, t, opacity: hump(t) }
 }
 
+// --- 流星群 --------------------------------------------------------
+
+/** 1 周期あたりの「群れ」の開始時刻(ms)。にぎやかに 2 回 */
+const METEOR_SHOWERS = [3_000, 14_000] as const
+/** 1 群れの本数 */
+const METEOR_SHOWER_SIZE = 5
+/** 群れ内の 1 本ごとの発生間隔 */
+const METEOR_STAGGER_MS = 220
+/** 流星 1 本の寿命 */
+const METEOR_DUR_MS = 850
+/** 同時に扱う最大本数(nightSceneModel のメッシュプールと揃える) */
+export const METEOR_POOL_SIZE = 6
+
+export interface MeteorState {
+  active: boolean
+  /** METEOR_PATHS のインデックス */
+  pathIndex: number
+  /** 頭が軌道上のどこにいるか 0..1 */
+  progress: number
+  /** 明るさ 0..1(出現で素早く立ち上がり、末端でフェード) */
+  intensity: number
+}
+
+const INACTIVE_METEOR: MeteorState = { active: false, pathIndex: 0, progress: 0, intensity: 0 }
+
+/**
+ * 固定長 METEOR_POOL_SIZE の配列を返す。認識のたびに CYCLE_MS 周期で
+ * 2 回の群れが頭出しされる。決定的(乱数なし)。
+ */
+export function meteors(elapsedMs: number, pathCount = 10): MeteorState[] {
+  const out: MeteorState[] = []
+  for (let showerIndex = 0; showerIndex < METEOR_SHOWERS.length; showerIndex++) {
+    const showerStart = METEOR_SHOWERS[showerIndex]
+    for (let i = 0; i < METEOR_SHOWER_SIZE; i++) {
+      const phase = mod(elapsedMs - showerStart - i * METEOR_STAGGER_MS, CYCLE_MS)
+      if (phase > METEOR_DUR_MS) continue
+      const p = phase / METEOR_DUR_MS
+      // 立ち上がり 15% / 減衰は残り。末端でゼロ。
+      const intensity = clamp01(p / 0.15) * clamp01((1 - p) / 0.55)
+      out.push({
+        active: true,
+        pathIndex: (showerIndex * 7 + i * 3) % pathCount,
+        progress: p,
+        intensity,
+      })
+      if (out.length === METEOR_POOL_SIZE) break
+    }
+    if (out.length === METEOR_POOL_SIZE) break
+  }
+  while (out.length < METEOR_POOL_SIZE) out.push(INACTIVE_METEOR)
+  return out
+}
+
 // --- まとめ ---------------------------------------------------------
 
 export interface TimelineSample {
@@ -150,6 +203,7 @@ export interface TimelineSample {
   skyBreath: number
   hazeDrift: number
   carTrail: CarTrailState
+  meteors: MeteorState[]
 }
 
 /** 1 フレーム分の全アニメーション状態をまとめて返す */
@@ -161,5 +215,6 @@ export function sampleTimeline(elapsedMs: number): TimelineSample {
     skyBreath: skyBreath(elapsedMs),
     hazeDrift: hazeDrift(elapsedMs),
     carTrail: carTrail(elapsedMs),
+    meteors: meteors(elapsedMs),
   }
 }

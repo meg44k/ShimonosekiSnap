@@ -36,6 +36,32 @@ export function createGlowTexture(size = 128): THREE.CanvasTexture {
   return finish(canvas)
 }
 
+/**
+ * 流星の筋。x=0(尾の先端)が深青・透明 → 水色 → x=1(頭)がピンク〜白。
+ * 上下端はソフトに減衰。加算合成のプレーンに貼る。
+ */
+export function createMeteorTexture(width = 256, height = 16): THREE.CanvasTexture {
+  const [canvas, ctx] = canvas2d(width, height)
+  if (ctx) {
+    const g = ctx.createLinearGradient(0, 0, width, 0)
+    g.addColorStop(0, 'rgba(20,50,170,0)')
+    g.addColorStop(0.28, 'rgba(40,150,230,0.45)')
+    g.addColorStop(0.68, 'rgba(255,110,195,0.9)')
+    g.addColorStop(0.92, 'rgba(255,235,250,1)')
+    g.addColorStop(1, 'rgba(255,255,255,1)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, width, height)
+    const v = ctx.createLinearGradient(0, 0, 0, height)
+    v.addColorStop(0, 'rgba(0,0,0,1)')
+    v.addColorStop(0.5, 'rgba(0,0,0,0)')
+    v.addColorStop(1, 'rgba(0,0,0,1)')
+    ctx.globalCompositeOperation = 'destination-out'
+    ctx.fillStyle = v
+    ctx.fillRect(0, 0, width, height)
+  }
+  return finish(canvas)
+}
+
 /** 水平線付近の暖色の残照。skyBreath で不透明度を揺らす加算プレーン用 */
 export function createAfterglowTexture(width = 512, height = 256): THREE.CanvasTexture {
   const [canvas, ctx] = canvas2d(width, height)

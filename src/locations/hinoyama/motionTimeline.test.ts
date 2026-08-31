@@ -6,6 +6,8 @@ import {
   carTrail,
   CYCLE_MS,
   hazeDrift,
+  meteors,
+  METEOR_POOL_SIZE,
   sampleTimeline,
   skyBreath,
   twinkle,
@@ -170,12 +172,73 @@ describe('carTrail', () => {
   })
 })
 
+describe('meteors', () => {
+  it('always returns a fixed-length pool', () => {
+    for (let ms = 0; ms < CYCLE_MS * 2; ms += 90) {
+      expect(meteors(ms)).toHaveLength(METEOR_POOL_SIZE)
+    }
+  })
+
+  it('keeps progress, intensity and pathIndex within valid ranges', () => {
+    for (let ms = 0; ms < CYCLE_MS; ms += 53) {
+      for (const m of meteors(ms, 10)) {
+        expect(m.progress).toBeGreaterThanOrEqual(0)
+        expect(m.progress).toBeLessThanOrEqual(1)
+        expect(m.intensity).toBeGreaterThanOrEqual(0)
+        expect(m.intensity).toBeLessThanOrEqual(1)
+        expect(m.pathIndex).toBeGreaterThanOrEqual(0)
+        expect(m.pathIndex).toBeLessThan(10)
+      }
+    }
+  })
+
+  it('has quiet stretches and busy peaks (a real shower, not a drizzle)', () => {
+    let sawEmpty = false
+    let peak = 0
+    for (let ms = 0; ms < CYCLE_MS; ms += 40) {
+      const count = meteors(ms).filter((m) => m.active).length
+      if (count === 0) sawEmpty = true
+      peak = Math.max(peak, count)
+    }
+    expect(sawEmpty).toBe(true)
+    expect(peak).toBeGreaterThanOrEqual(3)
+  })
+
+  it('never exceeds the pool with simultaneously active meteors', () => {
+    for (let ms = 0; ms < CYCLE_MS; ms += 25) {
+      expect(meteors(ms).filter((m) => m.active).length).toBeLessThanOrEqual(METEOR_POOL_SIZE)
+    }
+  })
+
+  it('fires two showers per cycle', () => {
+    // 立ち上がりエッジ(前フレーム 0 本 → 今フレーム >0 本)の回数
+    let edges = 0
+    let prev = 0
+    for (let ms = 0; ms < CYCLE_MS; ms += 20) {
+      const count = meteors(ms).filter((m) => m.active).length
+      if (prev === 0 && count > 0) edges++
+      prev = count
+    }
+    expect(edges).toBe(2)
+  })
+
+  it('repeats every cycle', () => {
+    expect(meteors(6_200 + CYCLE_MS)).toEqual(meteors(6_200))
+  })
+
+  it('marks unused pool slots inactive', () => {
+    const quiet = meteors(12_000) // 群れと群れの間
+    expect(quiet.every((m) => !m.active)).toBe(true)
+  })
+})
+
 describe('sampleTimeline', () => {
   it('bundles every channel', () => {
     const s = sampleTimeline(5_000)
     expect(Object.keys(s).sort()).toEqual(
-      ['beacon', 'boats', 'bridgeShimmer', 'carTrail', 'hazeDrift', 'skyBreath'].sort(),
+      ['beacon', 'boats', 'bridgeShimmer', 'carTrail', 'hazeDrift', 'meteors', 'skyBreath'].sort(),
     )
     expect(s.boats).toHaveLength(3)
+    expect(s.meteors).toHaveLength(METEOR_POOL_SIZE)
   })
 })

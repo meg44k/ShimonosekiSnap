@@ -63,6 +63,23 @@ export const FOREGROUND_ROAD_PATH: readonly (readonly [number, number])[] = [
   [0.8, 0.83],
 ]
 
+/**
+ * 流星の直線軌道(画像UV)。すべて空の領域(稜線 v≈0.45 より上)に収める。
+ * `from` が出現点、`to` が消失点。斜めに落ちる向きで角度をばらす。
+ */
+export const METEOR_PATHS: readonly { from: readonly [number, number]; to: readonly [number, number] }[] = [
+  { from: [0.12, 0.04], to: [0.34, 0.3] },
+  { from: [0.28, 0.02], to: [0.44, 0.26] },
+  { from: [0.46, 0.05], to: [0.3, 0.32] },
+  { from: [0.62, 0.03], to: [0.78, 0.28] },
+  { from: [0.78, 0.06], to: [0.6, 0.34] },
+  { from: [0.9, 0.08], to: [0.72, 0.36] },
+  { from: [0.2, 0.12], to: [0.4, 0.4] },
+  { from: [0.54, 0.02], to: [0.66, 0.24] },
+  { from: [0.7, 0.1], to: [0.88, 0.34] },
+  { from: [0.36, 0.08], to: [0.2, 0.34] },
+]
+
 function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): number {
   const t2 = t * t
   const t3 = t2 * t
