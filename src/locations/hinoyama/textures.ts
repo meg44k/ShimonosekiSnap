@@ -3,7 +3,6 @@
 // 解像度非依存でにじまないため、写真ピクセルを直接光らせるより上質。
 
 import * as THREE from 'three'
-import { SKY_GRADIENT_STOPS } from './sceneTrace'
 
 function canvas2d(width: number, height: number): [HTMLCanvasElement, CanvasRenderingContext2D | null] {
   const canvas = document.createElement('canvas')
@@ -59,35 +58,6 @@ export function createStreakTexture(width = 256, height = 32): THREE.CanvasTextu
     ctx.globalCompositeOperation = 'destination-out'
     ctx.fillStyle = v
     ctx.fillRect(0, 0, width, height)
-  }
-  return finish(canvas)
-}
-
-/** 薄明の空。SKY_GRADIENT_STOPS の縦グラデ + 上部にごく淡い星 */
-export function createSkyTexture(width = 512, height = 768): THREE.CanvasTexture {
-  const [canvas, ctx] = canvas2d(width, height)
-  if (ctx) {
-    const g = ctx.createLinearGradient(0, 0, 0, height)
-    for (const stop of SKY_GRADIENT_STOPS) g.addColorStop(stop.y, stop.color)
-    ctx.fillStyle = g
-    ctx.fillRect(0, 0, width, height)
-    // 星: 上 45% にだけ、非常に小さく散らす
-    ctx.fillStyle = 'rgba(255,255,255,0.85)'
-    let seed = 1337
-    const rand = () => {
-      seed = (seed * 1664525 + 1013904223) >>> 0
-      return seed / 4294967296
-    }
-    for (let i = 0; i < 220; i++) {
-      const x = rand() * width
-      const y = rand() * height * 0.45
-      const r = rand() * 0.9 + 0.2
-      ctx.globalAlpha = 0.3 + rand() * 0.5
-      ctx.beginPath()
-      ctx.arc(x, y, r, 0, Math.PI * 2)
-      ctx.fill()
-    }
-    ctx.globalAlpha = 1
   }
   return finish(canvas)
 }

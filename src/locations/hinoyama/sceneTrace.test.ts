@@ -3,7 +3,6 @@ import {
   BRIDGE_PATH,
   CITY_LIGHT_REGIONS,
   imageToMarker,
-  LAYER_DEFS,
   MARKER_ASPECT,
   mulberry32,
   pointInPolygon,
@@ -27,51 +26,6 @@ describe('imageToMarker', () => {
     const [x, y] = imageToMarker(1, 1)
     expect(x).toBeCloseTo(0.5, 6)
     expect(y).toBeCloseTo(-MARKER_ASPECT / 2, 6)
-  })
-})
-
-describe('LAYER_DEFS', () => {
-  it('lists the six depth layers back-to-front', () => {
-    expect(LAYER_DEFS.map((l) => l.id)).toEqual(['sky', 'far', 'city', 'water', 'bridge', 'near'])
-  })
-
-  it('orders layers by strictly increasing z (back to front)', () => {
-    for (let i = 1; i < LAYER_DEFS.length; i++) {
-      expect(LAYER_DEFS[i].z).toBeGreaterThan(LAYER_DEFS[i - 1].z)
-    }
-  })
-
-  it('keeps every layer within +/-0.05 of the marker plane', () => {
-    for (const layer of LAYER_DEFS) {
-      expect(Math.abs(layer.z)).toBeLessThanOrEqual(0.05)
-    }
-  })
-
-  it('gives only the sky layer an empty polygon set', () => {
-    for (const layer of LAYER_DEFS) {
-      if (layer.id === 'sky') expect(layer.polygons).toHaveLength(0)
-      else expect(layer.polygons.length).toBeGreaterThan(0)
-    }
-  })
-
-  it('keeps every polygon vertex inside the image UV square with at least 3 vertices', () => {
-    for (const layer of LAYER_DEFS) {
-      for (const polygon of layer.polygons) {
-        expect(polygon.length).toBeGreaterThanOrEqual(3)
-        for (const [u, v] of polygon) {
-          expect(u).toBeGreaterThanOrEqual(0)
-          expect(u).toBeLessThanOrEqual(1)
-          expect(v).toBeGreaterThanOrEqual(0)
-          expect(v).toBeLessThanOrEqual(1)
-        }
-      }
-    }
-  })
-
-  it('compensates apparent scale in step with z', () => {
-    for (const layer of LAYER_DEFS) {
-      expect(layer.scaleComp).toBeCloseTo(1 + layer.z, 2)
-    }
   })
 })
 
