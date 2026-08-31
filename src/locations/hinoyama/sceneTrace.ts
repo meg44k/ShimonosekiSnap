@@ -65,20 +65,29 @@ export const FOREGROUND_ROAD_PATH: readonly (readonly [number, number])[] = [
 
 /**
  * 流星の直線軌道(画像UV)。すべて空の領域(稜線 v≈0.45 より上)に収める。
- * `from` が出現点、`to` が消失点。斜めに落ちる向きで角度をばらす。
+ * `from` が出現点、`to` が消失点。流星群は放射点から平行に流れて見えるので、
+ * 全軌道の向きを揃える(右下がりの同一方向ベクトル)。出現点だけ空にばらす。
  */
-export const METEOR_PATHS: readonly { from: readonly [number, number]; to: readonly [number, number] }[] = [
-  { from: [0.12, 0.04], to: [0.34, 0.3] },
-  { from: [0.28, 0.02], to: [0.44, 0.26] },
-  { from: [0.46, 0.05], to: [0.3, 0.32] },
-  { from: [0.62, 0.03], to: [0.78, 0.28] },
-  { from: [0.78, 0.06], to: [0.6, 0.34] },
-  { from: [0.9, 0.08], to: [0.72, 0.36] },
-  { from: [0.2, 0.12], to: [0.4, 0.4] },
-  { from: [0.54, 0.02], to: [0.66, 0.24] },
-  { from: [0.7, 0.1], to: [0.88, 0.34] },
-  { from: [0.36, 0.08], to: [0.2, 0.34] },
+const METEOR_DIR: readonly [number, number] = [0.2, 0.3]
+const METEOR_STARTS: readonly (readonly [number, number])[] = [
+  [0.06, 0.02],
+  [0.18, 0.05],
+  [0.3, 0.02],
+  [0.42, 0.06],
+  [0.52, 0.03],
+  [0.62, 0.07],
+  [0.72, 0.02],
+  [0.14, 0.09],
+  [0.36, 0.1],
+  [0.58, 0.08],
 ]
+export const METEOR_PATHS: readonly {
+  from: readonly [number, number]
+  to: readonly [number, number]
+}[] = METEOR_STARTS.map(([u, v]) => ({
+  from: [u, v],
+  to: [u + METEOR_DIR[0], v + METEOR_DIR[1]],
+}))
 
 function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): number {
   const t2 = t * t

@@ -148,9 +148,9 @@ const METEOR_SHOWERS = [3_000, 14_000] as const
 /** 1 群れの本数 */
 const METEOR_SHOWER_SIZE = 5
 /** 群れ内の 1 本ごとの発生間隔 */
-const METEOR_STAGGER_MS = 220
-/** 流星 1 本の寿命 */
-const METEOR_DUR_MS = 850
+const METEOR_STAGGER_MS = 300
+/** 流星 1 本の寿命。長めに取り、そのぶん軌道もやや長くして「少し遅く」する */
+const METEOR_DUR_MS = 1_700
 /** 同時に扱う最大本数(nightSceneModel のメッシュプールと揃える) */
 export const METEOR_POOL_SIZE = 6
 
