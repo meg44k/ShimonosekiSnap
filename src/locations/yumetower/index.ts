@@ -10,4 +10,5 @@ export const yumetowerLocation: LocationConfig = {
   overlaySrc,
   costumeSrc,
   detectionThreshold: 0.5,
+  brandLabel: '海峡ゆめタワー',
 }

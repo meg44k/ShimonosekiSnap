@@ -33,9 +33,20 @@ export interface CostumeTransform {
   rotation: number
 }
 
+export interface CostumeBodyFitOptions {
+  shoulderWidthRatio: number
+  torsoHeightRatio: number
+  blend: number
+}
+
 export interface TrackedFace {
   box: FaceBox
   keypoints: TrackingPoint[]
+}
+
+export interface TrackedArm {
+  shoulder: TrackingPoint
+  end: TrackingPoint
 }
 
 export interface FixedBrandLayout {
@@ -241,6 +252,17 @@ function pointByName(points: readonly TrackingPoint[], name: string): TrackingPo
   return points.find((point) => point.name === name && (point.score ?? 1) >= MIN_KEYPOINT_SCORE)
 }
 
+export function getTrackedArm(
+  points: readonly TrackingPoint[],
+  side: 'left' | 'right',
+): TrackedArm | undefined {
+  const shoulder = pointByName(points, `${side}_shoulder`)
+  const wrist = pointByName(points, `${side}_wrist`)
+  const elbow = pointByName(points, `${side}_elbow`)
+  const end = wrist ?? elbow
+  return shoulder && end ? { shoulder, end } : undefined
+}
+
 function midpoint(a?: TrackingPoint, b?: TrackingPoint): TrackingPoint | undefined {
   if (!a || !b) return undefined
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
@@ -261,6 +283,8 @@ export function getSnowCostumeTransform(
   faceKeypoints: readonly TrackingPoint[],
   poseKeypoints: readonly TrackingPoint[],
   costumeAspectRatio: number,
+  faceHoleWidthRatio = COSTUME_FACE_HOLE_WIDTH_RATIO,
+  faceScale = SNOW_FACE_HOLE_SCALE,
 ): CostumeTransform {
   // The named points support the lightweight detector and the numeric indices
   // support MediaPipe FaceMesh (468 landmarks), which is used by the camera.
@@ -280,7 +304,7 @@ export function getSnowCostumeTransform(
     ? Math.hypot(leftEye.x - rightEye.x, leftEye.y - rightEye.y)
     : faceBox.width * 0.43
   const faceWidth = Math.max(faceBox.width, eyeDistance / 0.43)
-  const costumeWidth = (faceWidth * SNOW_FACE_HOLE_SCALE) / COSTUME_FACE_HOLE_WIDTH_RATIO
+  const costumeWidth = (faceWidth * faceScale) / faceHoleWidthRatio
   const costumeHeight = costumeWidth / costumeAspectRatio
 
   const eyeAngle = rightEye && leftEye
@@ -297,6 +321,59 @@ export function getSnowCostumeTransform(
     width: costumeWidth,
     height: costumeHeight,
     rotation,
+  }
+}
+
+/**
+ * Refines the face-anchored transform with MoveNet shoulders and hips. The
+ * face remains the primary anchor, while garment width and height follow the
+ * visible upper body. Missing body points safely preserve the face-only fit.
+ */
+export function fitCostumeTransformToBody(
+  faceTransform: CostumeTransform,
+  poseKeypoints: readonly TrackingPoint[],
+  costumeAspectRatio: number,
+  options: CostumeBodyFitOptions,
+): CostumeTransform {
+  const leftShoulder = pointByName(poseKeypoints, 'left_shoulder')
+  const rightShoulder = pointByName(poseKeypoints, 'right_shoulder')
+  if (!leftShoulder || !rightShoulder) return faceTransform
+
+  const blend = Math.min(1, Math.max(0, options.blend))
+  const blendValue = (faceValue: number, bodyValue: number) =>
+    faceValue + (bodyValue - faceValue) * blend
+  const clampToFaceScale = (value: number, faceValue: number) =>
+    Math.min(faceValue * 1.45, Math.max(faceValue * 0.68, value))
+
+  const shoulderWidth = Math.hypot(
+    leftShoulder.x - rightShoulder.x,
+    leftShoulder.y - rightShoulder.y,
+  )
+  const bodyWidth = shoulderWidth / options.shoulderWidthRatio
+  const width = blendValue(
+    faceTransform.width,
+    clampToFaceScale(bodyWidth, faceTransform.width),
+  )
+
+  const shoulderCenter = midpoint(leftShoulder, rightShoulder)!
+  const leftHip = pointByName(poseKeypoints, 'left_hip')
+  const rightHip = pointByName(poseKeypoints, 'right_hip')
+  const hipCenter = midpoint(leftHip, rightHip)
+  const proportionalHeight = width / costumeAspectRatio
+  const bodyHeight = hipCenter
+    ? Math.hypot(hipCenter.x - shoulderCenter.x, hipCenter.y - shoulderCenter.y) /
+      options.torsoHeightRatio
+    : proportionalHeight
+  const height = blendValue(
+    proportionalHeight,
+    clampToFaceScale(bodyHeight, faceTransform.height),
+  )
+
+  return {
+    ...faceTransform,
+    anchorX: faceTransform.anchorX + (shoulderCenter.x - faceTransform.anchorX) * 0.12,
+    width,
+    height,
   }
 }
 

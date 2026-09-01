@@ -10,12 +10,17 @@ import { captureComposite } from '../../features/ar/captureComposite'
 import type { PersonDetectionLocationConfig } from '../types'
 import {
   type CostumeTransform,
+  fitCostumeTransformToBody,
   getFixedBrandLayout,
   getSnowCostumeTransform,
   poseToTrackedFace,
   removeConnectedWhiteBackground,
   smoothCostumeTransform,
 } from './personDetection'
+import {
+  createTexturedHanbokTorso,
+  drawTexturedHanbok,
+} from './texturedHanbokRenderer'
 
 interface PersonDetectionCameraViewProps {
   location: PersonDetectionLocationConfig
@@ -28,13 +33,20 @@ const DETECTION_INTERVAL_MS = 120
 const FACE_TRACKING_HOLD_MS = 800
 const COSTUME_FACE_HOLE_CENTER_X_RATIO = 0.5
 const COSTUME_FACE_HOLE_CENTER_Y_RATIO = 0.315
-const BRAND_LABEL = '海峡ゆめタワー'
 const COSTUME_TRANSPARENT_SEEDS = [
   { xRatio: 0.5, yRatio: 0.32 },
   { xRatio: 0.2, yRatio: 0.57 },
   { xRatio: 0.8, yRatio: 0.57 },
   { xRatio: 0.5, yRatio: 0.85 },
 ]
+const DEFAULT_COSTUME_LAYOUT = {
+  faceHoleCenterXRatio: COSTUME_FACE_HOLE_CENTER_X_RATIO,
+  faceHoleCenterYRatio: COSTUME_FACE_HOLE_CENTER_Y_RATIO,
+  faceHoleWidthRatio: 0.36,
+  faceScale: 1.02,
+  renderer: 'image',
+  bodyFit: undefined,
+} as const
 
 function loadCutout(
   src: string,
@@ -71,6 +83,7 @@ export function PersonDetectionCameraView({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [ready, setReady] = useState(false)
   const [subjectDetected, setSubjectDetected] = useState(false)
+  const costumeLayout = location.costumeLayout ?? DEFAULT_COSTUME_LAYOUT
 
   useEffect(() => {
     const video = videoRef.current
@@ -97,7 +110,10 @@ export function PersonDetectionCameraView({
         const [overlayImage, costumeImage, loadedFaceDetector, loadedPoseDetector] =
           await Promise.all([
             loadCutout(location.overlaySrc),
-            loadCutout(location.costumeSrc, COSTUME_TRANSPARENT_SEEDS),
+            loadCutout(
+              location.costumeSrc,
+              location.costumeTransparentSeeds ?? COSTUME_TRANSPARENT_SEEDS,
+            ),
             loadFaceLandmarksDetector({
               runtime: 'tfjs',
               maxFaces: 1,
@@ -110,6 +126,10 @@ export function PersonDetectionCameraView({
           ])
         faceDetector = loadedFaceDetector
         poseDetector = loadedPoseDetector
+        const texturedTorso =
+          costumeLayout.renderer === 'textured-hanbok'
+            ? createTexturedHanbokTorso(costumeImage)
+            : undefined
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop())
           loadedFaceDetector.dispose()
@@ -147,12 +167,22 @@ export function PersonDetectionCameraView({
               const poseFace = poseToTrackedFace(pose?.keypoints ?? [])
               const face = meshFace ?? poseFace
               if (face) {
-                const currentTransform = getSnowCostumeTransform(
+                const faceTransform = getSnowCostumeTransform(
                   face.box,
                   face.keypoints,
                   pose?.keypoints ?? [],
                   costumeImage.width / costumeImage.height,
+                  costumeLayout.faceHoleWidthRatio,
+                  costumeLayout.faceScale,
                 )
+                const currentTransform = costumeLayout.bodyFit
+                  ? fitCostumeTransformToBody(
+                      faceTransform,
+                      pose?.keypoints ?? [],
+                      costumeImage.width / costumeImage.height,
+                      costumeLayout.bodyFit,
+                    )
+                  : faceTransform
                 trackedCostumeTransform = trackedCostumeTransform
                   ? smoothCostumeTransform(trackedCostumeTransform, currentTransform)
                   : currentTransform
@@ -168,17 +198,28 @@ export function PersonDetectionCameraView({
 
               if (hasSubject) {
                 if (costumeTransform) {
-                  context.save()
-                  context.translate(costumeTransform.anchorX, costumeTransform.anchorY)
-                  context.rotate(costumeTransform.rotation)
-                  context.drawImage(
-                    costumeImage,
-                    -costumeTransform.width * COSTUME_FACE_HOLE_CENTER_X_RATIO,
-                    -costumeTransform.height * COSTUME_FACE_HOLE_CENTER_Y_RATIO,
-                    costumeTransform.width,
-                    costumeTransform.height,
-                  )
-                  context.restore()
+                  if (costumeLayout.renderer === 'textured-hanbok' && texturedTorso) {
+                    drawTexturedHanbok(
+                      context,
+                      costumeImage,
+                      texturedTorso,
+                      costumeTransform,
+                      pose?.keypoints ?? [],
+                      costumeLayout,
+                    )
+                  } else {
+                    context.save()
+                    context.translate(costumeTransform.anchorX, costumeTransform.anchorY)
+                    context.rotate(costumeTransform.rotation)
+                    context.drawImage(
+                      costumeImage,
+                      -costumeTransform.width * costumeLayout.faceHoleCenterXRatio,
+                      -costumeTransform.height * costumeLayout.faceHoleCenterYRatio,
+                      costumeTransform.width,
+                      costumeTransform.height,
+                    )
+                    context.restore()
+                  }
                 }
               }
 
@@ -189,13 +230,15 @@ export function PersonDetectionCameraView({
                 canvasElement.clientHeight,
                 overlayImage.width / overlayImage.height,
               )
-              context.drawImage(
-                overlayImage,
-                brand.image.x,
-                brand.image.y,
-                brand.image.width,
-                brand.image.height,
-              )
+              if (location.showBrandImage !== false) {
+                context.drawImage(
+                  overlayImage,
+                  brand.image.x,
+                  brand.image.y,
+                  brand.image.width,
+                  brand.image.height,
+                )
+              }
               context.save()
               context.font = `700 ${brand.fontSize}px sans-serif`
               context.textAlign = 'left'
@@ -204,19 +247,19 @@ export function PersonDetectionCameraView({
               context.lineJoin = 'round'
               context.strokeStyle = 'rgba(0, 0, 0, 0.78)'
               context.fillStyle = '#ffffff'
-              context.strokeText(BRAND_LABEL, brand.textX, brand.textBaselineY)
-              context.fillText(BRAND_LABEL, brand.textX, brand.textBaselineY)
+              context.strokeText(location.brandLabel, brand.textX, brand.textBaselineY)
+              context.fillText(location.brandLabel, brand.textX, brand.textBaselineY)
               context.restore()
             }
             animationFrameId = requestAnimationFrame(detect)
           } catch (error) {
-            console.error('[yumetower] face filter stopped', error)
+            console.error(`[${location.id}] face filter stopped`, error)
             if (!cancelled) onError('顔フィルター処理中にエラーが発生しました')
           }
         }
         animationFrameId = requestAnimationFrame(detect)
       } catch (error) {
-        console.error('[yumetower] failed to start face filter', error)
+        console.error(`[${location.id}] failed to start face filter`, error)
         if (!cancelled) {
           onError(
             '顔フィルターを起動できませんでした。カメラの許可と通信環境を確認してください。',
@@ -235,7 +278,7 @@ export function PersonDetectionCameraView({
       poseDetector?.dispose()
       videoElement.srcObject = null
     }
-  }, [location, onError])
+  }, [costumeLayout, location, onError])
 
   const handleShutter = () => {
     const video = videoRef.current
@@ -244,7 +287,7 @@ export function PersonDetectionCameraView({
     try {
       onCapture(captureComposite(video, canvas))
     } catch (error) {
-      console.error('[yumetower] failed to capture photo', error)
+      console.error(`[${location.id}] failed to capture photo`, error)
       onError('撮影に失敗しました')
     }
   }

@@ -28,6 +28,16 @@ describe('locations registry', () => {
     expect(location?.cameraMode).toBe('person-detection')
   })
 
+  it('registers greenmall with the chima jeogori face filter', () => {
+    const location = getLocation('greenmall')
+    expect(location?.name).toBe('グリーンモール')
+    expect(location?.cameraMode).toBe('person-detection')
+    if (location?.cameraMode === 'person-detection') {
+      expect(location.brandLabel).toBe('グリーンモール')
+      expect(location.costumeLayout?.faceHoleCenterYRatio).toBeLessThan(0.2)
+    }
+  })
+
   it('has no duplicate ids among registered locations', () => {
     const ids = listLocations().map((location) => location.id)
     expect(new Set(ids).size).toBe(ids.length)

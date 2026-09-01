@@ -77,6 +77,21 @@ export interface PersonDetectionLocationConfig extends BaseLocationConfig {
   overlaySrc: string
   costumeSrc: string
   detectionThreshold: number
+  brandLabel: string
+  showBrandImage?: boolean
+  costumeLayout?: {
+    faceHoleCenterXRatio: number
+    faceHoleCenterYRatio: number
+    faceHoleWidthRatio: number
+    faceScale: number
+    renderer?: 'image' | 'textured-hanbok'
+    bodyFit?: {
+      shoulderWidthRatio: number
+      torsoHeightRatio: number
+      blend: number
+    }
+  }
+  costumeTransparentSeeds?: readonly { xRatio: number; yRatio: number }[]
 }
 
 export type LocationConfig = ImageTargetLocationConfig | PersonDetectionLocationConfig
