@@ -76,10 +76,9 @@ export interface PersonDetectionLocationConfig extends BaseLocationConfig {
   cameraMode: 'person-detection'
   overlaySrc: string
   costumeSrc: string
-  detectionThreshold: number
   brandLabel: string
   showBrandImage?: boolean
-  costumeLayout?: {
+  costumeLayout: {
     faceHoleCenterXRatio: number
     faceHoleCenterYRatio: number
     faceHoleWidthRatio: number
@@ -92,6 +91,7 @@ export interface PersonDetectionLocationConfig extends BaseLocationConfig {
     }
   }
   costumeTransparentSeeds?: readonly { xRatio: number; yRatio: number }[]
+  detectionThreshold: number
 }
 
 export type LocationConfig = ImageTargetLocationConfig | PersonDetectionLocationConfig

@@ -1,6 +1,7 @@
 export function captureComposite(
   video: HTMLVideoElement,
   overlayCanvas: HTMLCanvasElement,
+  isMirror: boolean = false,
   createCanvas: () => HTMLCanvasElement = () => document.createElement('canvas'),
 ): string {
   const canvas = createCanvas()
@@ -22,7 +23,14 @@ export function captureComposite(
   const sx = (video.videoWidth - sw) / 2
   const sy = (video.videoHeight - sh) / 2
 
+  ctx.save()
+  if (isMirror) {
+    ctx.translate(canvas.width, 0)
+    ctx.scale(-1, 1)
+  }
   ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
+  ctx.restore()
+
   ctx.drawImage(overlayCanvas, 0, 0, canvas.width, canvas.height)
 
   return canvas.toDataURL('image/png')

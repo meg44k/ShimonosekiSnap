@@ -256,6 +256,16 @@ describe('SNOW-style costume tracking', () => {
     ).toBe(faceTransform)
   })
 
+  it('uses a location-specific face opening when sizing headwear', () => {
+    const face = { xMin: 100, yMin: 60, width: 120, height: 140 }
+    const defaultTransform = getSnowCostumeTransform(face, [], [], 1)
+    const fuguTransform = getSnowCostumeTransform(face, [], [], 1, 0.52, 1.3)
+
+    expect(fuguTransform.width).toBeLessThan(defaultTransform.width)
+    expect(fuguTransform.anchorX).toBe(defaultTransform.anchorX)
+    expect(fuguTransform.anchorY).toBe(defaultTransform.anchorY)
+  })
+
   it('smoothes translation, scale, and rotation together', () => {
     const previous = { anchorX: 0, anchorY: 0, width: 100, height: 200, rotation: 0 }
     const current = { anchorX: 20, anchorY: 40, width: 140, height: 240, rotation: 0.2 }
