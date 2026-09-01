@@ -58,174 +58,50 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  text-align: center;
+  max-width: 400px;
+  width: 100%;
 }
 
 .camera-icon {
-  font-size: 80px;
-  line-height: 1;
-  animation: pulse 2s ease-in-out infinite;
+  font-size: 64px;
+  margin-bottom: 16px;
 }
 
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
+.start-screen h2 {
+  font-size: 24px;
+  margin: 0 0 8px 0;
+  color: var(--text-h);
 }
 
 .start-screen p {
   font-size: 16px;
   color: var(--text);
+  margin: 0 0 24px 0;
+  line-height: 1.5;
 }
 
-.location-list {
-  margin-top: 8px;
-  text-align: center;
-}
-
-.location-list-label {
-  font-size: 13px;
-  color: var(--text);
-  margin-bottom: 8px;
-}
-
-.location-list ul {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 0;
-  margin: 0;
-}
-
-.location-list a {
-  color: var(--accent);
-  font-size: 15px;
-  text-decoration: underline;
-}
-
-/* ===== Buttons ===== */
-.btn {
-  cursor: pointer;
-  border: none;
-  border-radius: 12px;
-  font-family: var(--sans);
-  font-size: 16px;
-  font-weight: 500;
-  transition: transform 0.15s, box-shadow 0.2s;
-}
-
-.btn:active {
-  transform: scale(0.96);
-}
-
-.btn-primary {
-  padding: 14px 32px;
-  background: var(--accent);
-  color: #fff;
-}
-
-.btn-primary:hover {
-  box-shadow: 0 4px 16px rgba(170, 59, 255, 0.35);
-}
-
-.btn-secondary {
-  padding: 14px 32px;
-  background: var(--social-bg);
-  color: var(--text-h);
-  border: 1px solid var(--border);
-}
-
-.btn-secondary:hover {
-  box-shadow: var(--shadow);
-}
-
-.btn-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(8px);
-  font-size: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-}
-
-.btn-icon:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-/* ===== Shutter Button ===== */
-.btn-shutter {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: #fff;
-  border: 4px solid rgba(255, 255, 255, 0.6);
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: transform 0.15s;
-}
-
-.btn-shutter:active {
-  transform: scale(0.9);
-}
-
-.shutter-inner {
-  display: block;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: #fff;
-  border: 2px solid #e5e5e5;
-  transition: background 0.15s;
-}
-
-.btn-shutter:hover .shutter-inner {
-  background: #f0f0f0;
-}
-
-/* ===== Camera Screen ===== */
+/* ===== Camera View ===== */
 .camera-screen {
   position: fixed;
   inset: 0;
-  width: 100%;
-  height: 100dvh;
+  background: #000;
+  z-index: 100;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  background: #000;
-  z-index: 10;
+  user-select: none;
 }
 
 .video-container {
-  position: relative;
   flex: 1;
-  width: 100%;
+  position: relative;
   overflow: hidden;
-  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.ar-container {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  /* MindARが<video>要素にインラインでz-index:-2を指定するため、このコンテナ
-     自身が独立したスタッキングコンテキストを持たないと、videoがページの
-     通常フロー要素(.video-containerのbackground:#111など)の下に沈み込んで
-     見えなくなる。z-indexを明示してスタッキングコンテキストを作る。 */
-  z-index: 0;
-}
-
-.ar-container video,
-.ar-container canvas {
-  position: absolute;
-  inset: 0;
+.camera-video {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -248,46 +124,94 @@
   pointer-events: none;
 }
 
+.camera-viewfinder-guide,
 .ar-status-overlay {
   position: absolute;
-  inset: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  text-align: center;
-  color: #fff;
-  font-size: 14px;
-  background: rgba(0, 0, 0, 0.35);
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  padding: 8px 16px;
+  border-radius: 20px;
   pointer-events: none;
 }
 
+.guide-text {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .camera-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 24px 32px calc(24px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+  z-index: 10;
+}
+
+.btn-shutter {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  border: 4px solid #fff;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 32px;
-  flex-shrink: 0;
-  padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
-  background: rgba(0, 0, 0, 0.85);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.btn-shutter:active {
+  transform: scale(0.92);
+}
+
+.shutter-inner {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.btn-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 /* ===== Preview Screen ===== */
 .preview-screen {
-  width: 100%;
-  max-width: 640px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  width: 100%;
+  max-width: 480px;
 }
 
 .photo-container {
   width: 100%;
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  margin-bottom: 24px;
 }
 
 .preview-photo {
@@ -298,7 +222,92 @@
 
 .preview-controls {
   display: flex;
-  gap: 12px;
+  gap: 16px;
+  width: 100%;
+}
+
+.preview-controls .btn {
+  flex: 1;
+}
+
+/* ===== Buttons ===== */
+.btn {
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-secondary {
+  background: var(--social-bg);
+  color: var(--text-h);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+/* ===== Location List ===== */
+.location-list {
+  margin-top: 24px;
+  width: 100%;
+}
+
+.location-list-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.location-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.location-list li a {
+  display: block;
+  padding: 12px 16px;
+  background: var(--social-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-h);
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.location-list li a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .model-credit {

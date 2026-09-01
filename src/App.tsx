@@ -1,9 +1,9 @@
-import { Suspense, lazy, useCallback, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { savePhoto } from './features/ar/savePhoto'
 import { getLocation } from './locations'
 import type { LocationConfig } from './locations/types'
 import { GuidancePage, MODEL_CREDIT } from './pages/GuidancePage'
-import { parseRoute } from './router'
+import { navigate, parseRoute, useRoute } from './router'
 import './App.css'
 
 const ArCameraView = lazy(() =>
@@ -13,6 +13,14 @@ const PersonDetectionCameraView = lazy(() =>
   import('./locations/yumetower/PersonDetectionCameraView').then((module) => ({
     default: module.PersonDetectionCameraView,
   })),
+)
+
+const GanryuCameraView = lazy(() =>
+  import('./locations/ganryujima/GanryuCameraView').then((module) => ({ default: module.GanryuCameraView })),
+)
+
+const CompilePage = lazy(() =>
+  import('./pages/CompilePage').then((module) => ({ default: module.CompilePage })),
 )
 
 type AppState = 'idle' | 'camera' | 'preview'
@@ -26,10 +34,23 @@ export function resolveLocation(pathname: string): LocationConfig | null {
 }
 
 function App() {
-  const [location] = useState<LocationConfig | null>(() => resolveLocation(window.location.pathname))
-  const [state, setState] = useState<AppState>(location ? 'camera' : 'idle')
+  const route = useRoute()
+  const location = route.type === 'spot' ? getLocation(route.id) ?? null : null
+
+  const [state, setState] = useState<AppState>('idle')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // ルートまたはロケーションが変化したときにカメラ起動状態へ遷移
+  useEffect(() => {
+    setError(null)
+    setPhotoUrl(null)
+    if (location) {
+      setState('camera')
+    } else {
+      setState('idle')
+    }
+  }, [location])
 
   const handleCapture = useCallback((dataUrl: string) => {
     setPhotoUrl(dataUrl)
@@ -59,11 +80,34 @@ function App() {
     })
   }, [photoUrl, location])
 
+  if (route.type === 'compile') {
+    return (
+      <div className="app">
+        <header className="app-header">
+          <h1 style={{ cursor: 'pointer' }} onClick={() => navigate('/')}>
+            📸 ShimonosekiSnap
+          </h1>
+          <p className="subtitle">ARターゲットデータ生成ツール</p>
+        </header>
+        <main className="app-main">
+          <Suspense fallback={<div className="start-screen"><p>読み込み中...</p></div>}>
+            <CompilePage />
+          </Suspense>
+        </main>
+      </div>
+    )
+  }
+
   if (!location) {
     return (
       <div className="app">
         <header className="app-header">
-          <h1>📸 ShimonosekiSnap</h1>
+          <h1
+            style={{ cursor: 'pointer' }}
+            onClick={() => navigate('/')}
+          >
+            📸 ShimonosekiSnap
+          </h1>
           <p className="subtitle">下関の思い出を写真に残そう</p>
         </header>
         <main className="app-main">
@@ -73,11 +117,25 @@ function App() {
     )
   }
 
+  const locationIcon =
+    location.id === 'ganryujima'
+      ? '⚔️'
+      : location.id === 'akama'
+        ? '⛩️'
+        : location.id === 'yumetower'
+          ? '🗼'
+          : '🌊'
+
   return (
     <div className="app">
       {state !== 'camera' && (
         <header className="app-header">
-          <h1>📸 ShimonosekiSnap</h1>
+          <h1
+            style={{ cursor: 'pointer' }}
+            onClick={() => navigate('/')}
+          >
+            📸 ShimonosekiSnap
+          </h1>
           <p className="subtitle">下関の思い出を写真に残そう</p>
         </header>
       )}
@@ -91,43 +149,59 @@ function App() {
 
         {state === 'idle' && (
           <div className="start-screen">
-            <div className="camera-icon">📷</div>
-            <p>{location.name}にカメラを向けて撮影しましょう</p>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => {
-                setError(null)
-                setState('camera')
-              }}
-            >
-              カメラを起動
-            </button>
-            <p className="model-credit">{MODEL_CREDIT}</p>
+            <div className="camera-icon">{locationIcon}</div>
+            <h2>{location.name}</h2>
+            <p>{location.guidanceText || `${location.name}にカメラを向けて撮影しましょう`}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '280px' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setError(null)
+                  setState('camera')
+                }}
+              >
+                カメラを起動
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => navigate('/')}
+              >
+                ← スポット一覧に戻る
+              </button>
+            </div>
+            {location.id === 'tsunoshima' && <p className="model-credit">{MODEL_CREDIT}</p>}
           </div>
         )}
 
-        {state === 'camera' && location.cameraMode === 'image-target' && (
+        {state === 'camera' && (
           <Suspense fallback={<div className="camera-screen" />}>
-            <ArCameraView
-              key={location.id}
-              location={location}
-              onCapture={handleCapture}
-              onClose={() => setState('idle')}
-              onError={handleArError}
-            />
-          </Suspense>
-        )}
-
-        {state === 'camera' && location.cameraMode === 'person-detection' && (
-          <Suspense fallback={<div className="camera-screen" />}>
-            <PersonDetectionCameraView
-              key={location.id}
-              location={location}
-              onCapture={handleCapture}
-              onClose={() => setState('idle')}
-              onError={handleArError}
-            />
+            {location.id === 'ganryujima' ? (
+              <GanryuCameraView
+                key={location.id}
+                location={location}
+                onCapture={handleCapture}
+                onClose={() => setState('idle')}
+                onError={handleArError}
+              />
+            ) : location.cameraMode === 'person-detection' ? (
+              <PersonDetectionCameraView
+                key={location.id}
+                location={location}
+                onCapture={handleCapture}
+                onClose={() => setState('idle')}
+                onError={handleArError}
+              />
+            ) : (
+              <ArCameraView
+                key={location.id}
+                location={location}
+                onCapture={handleCapture}
+                onClose={() => setState('idle')}
+                onError={handleArError}
+              />
+            )}
           </Suspense>
         )}
 
