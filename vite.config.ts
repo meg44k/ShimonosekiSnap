@@ -34,6 +34,10 @@ function saveTargetPlugin(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), saveTargetPlugin()],
+  server: {
+    // Allow phones and tablets on the same Wi-Fi to reach the local camera app.
+    host: '0.0.0.0',
+  },
   resolve: {
     alias: [
       {
