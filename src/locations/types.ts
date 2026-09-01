@@ -92,6 +92,8 @@ export interface PersonDetectionLocationConfig extends BaseLocationConfig {
   }
   costumeTransparentSeeds?: readonly { xRatio: number; yRatio: number }[]
   detectionThreshold: number
+  /** 同時に衣装を付ける人数の上限。省略時は 1(単一人物) */
+  maxSubjects?: number
 }
 
 export type LocationConfig = ImageTargetLocationConfig | PersonDetectionLocationConfig

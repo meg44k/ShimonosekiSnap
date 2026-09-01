@@ -23,4 +23,5 @@ export const yumetowerLocation: LocationConfig = {
     { xRatio: 0.5, yRatio: 0.85 },
   ],
   detectionThreshold: 0.5,
+  maxSubjects: 3,
 }

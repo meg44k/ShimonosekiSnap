@@ -10,6 +10,7 @@ export const greenmallLocation: LocationConfig = {
   overlaySrc: greenmallGateSrc,
   costumeSrc: chimaJeogoriSrc,
   detectionThreshold: 0.5,
+  maxSubjects: 3,
   brandLabel: 'グリーンモール',
   costumeLayout: {
     faceHoleCenterXRatio: 0.5,
