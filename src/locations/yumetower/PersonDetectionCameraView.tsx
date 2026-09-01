@@ -36,6 +36,15 @@ interface PersonDetectionCameraViewProps {
 
 const DETECTION_INTERVAL_MS = 120
 const FACE_TRACKING_HOLD_MS = 800
+
+// アプリ同梱のモデル(public/models/。scripts/fetch-models.mjs で取得)。
+// 既定の tfhub.dev(リダイレクト有り・ヘッダ制御不可)ではなく自オリジンの
+// エッジ CDN から immutable キャッシュで配るため、明示的に URL を渡す。
+const MODEL_BASE = `${import.meta.env.BASE_URL}models`
+const FACE_DETECTOR_MODEL_URL = `${MODEL_BASE}/face-detector-short/model.json`
+const FACE_MESH_MODEL_URL = `${MODEL_BASE}/face-mesh/model.json`
+const MOVENET_SINGLEPOSE_MODEL_URL = `${MODEL_BASE}/movenet-singlepose-lightning/model.json`
+const MOVENET_MULTIPOSE_MODEL_URL = `${MODEL_BASE}/movenet-multipose-lightning/model.json`
 const COSTUME_FACE_HOLE_CENTER_X_RATIO = 0.5
 const COSTUME_FACE_HOLE_CENTER_Y_RATIO = 0.315
 const COSTUME_TRANSPARENT_SEEDS = [
@@ -134,6 +143,8 @@ export function PersonDetectionCameraView({
             ),
             loadPoseDetector({
               modelType: maxSubjects > 1 ? MULTIPOSE_LIGHTNING : SINGLEPOSE_LIGHTNING,
+              modelUrl:
+                maxSubjects > 1 ? MOVENET_MULTIPOSE_MODEL_URL : MOVENET_SINGLEPOSE_MODEL_URL,
               enableSmoothing: true,
             }),
           ])
@@ -163,6 +174,8 @@ export function PersonDetectionCameraView({
               runtime: 'tfjs',
               maxFaces: maxSubjects,
               refineLandmarks: false,
+              detectorModelUrl: FACE_DETECTOR_MODEL_URL,
+              landmarkModelUrl: FACE_MESH_MODEL_URL,
             }),
           )
           .then((loadedFaceDetector) => {
