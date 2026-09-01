@@ -101,6 +101,28 @@
   justify-content: center;
 }
 
+/* MindAR が <video>/<canvas> を注入するコンテナ。サイズ指定が無いと 0x0 に
+   潰れてカメラ映像が真っ黒になる。MindAR は <video> にインラインで
+   z-index:-2 を付けるため、このコンテナ自身が独立したスタッキング
+   コンテキストを持たないと video がページ背景の下に沈む。z-index を
+   明示してスタッキングコンテキストを作る。 */
+.ar-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.ar-container video,
+.ar-container canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .camera-video {
   width: 100%;
   height: 100%;
@@ -152,12 +174,30 @@
   padding: 24px 32px calc(24px + env(safe-area-inset-bottom, 0px));
   display: flex;
   align-items: center;
-  justify-content: space-around;
+  /* シャッターを常に画面中央へ。閉じる/カメラ切替などの丸アイコンは
+     フローから外して端に固定し、シャッターの中央寄せに影響させない。 */
+  justify-content: center;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
   z-index: 10;
 }
 
-.btn-shutter {
+.camera-controls .btn-icon {
+  position: absolute;
+  top: 50%;
+  right: 32px;
+  transform: translateY(-50%);
+}
+
+/* 3 ボタン構成(カメラ切替 + シャッター + 閉じる)のとき、先頭のアイコンは左側へ */
+.camera-controls .btn-icon:first-child {
+  right: auto;
+  left: 32px;
+}
+
+/* `.btn` の共通ルール(padding: 12px 24px 等)がこの後に定義されており、
+   セレクタ特異度が同じだと後勝ちで padding を上書きされてしまう。
+   `.btn.btn-shutter` / `.btn.btn-icon` と特異度を上げて確実に勝たせる。 */
+.btn.btn-shutter {
   width: 72px;
   height: 72px;
   border-radius: 50%;
@@ -171,7 +211,7 @@
   transition: transform 0.1s ease;
 }
 
-.btn-shutter:active {
+.btn.btn-shutter:active {
   transform: scale(0.92);
 }
 
@@ -182,9 +222,10 @@
   background: #fff;
 }
 
-.btn-icon {
+.btn.btn-icon {
   width: 44px;
   height: 44px;
+  padding: 0;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(8px);
