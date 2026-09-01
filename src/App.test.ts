@@ -29,6 +29,18 @@ describe('resolveLocation', () => {
     expect(location?.name).toBe('海響館')
   })
 
+  it('returns the location config for ganryujima spot', () => {
+    const location = resolveLocation('/spot/ganryujima')
+    expect(location?.id).toBe('ganryujima')
+    expect(location?.name).toBe('巌流島')
+  })
+
+  it('returns the karato face-filter config', () => {
+    const location = resolveLocation('/spot/karato')
+    expect(location?.id).toBe('karato')
+    expect(location?.cameraMode).toBe('person-detection')
+  })
+
   it('returns null for an unknown spot id', () => {
     expect(resolveLocation('/spot/doesnotexist')).toBeNull()
   })

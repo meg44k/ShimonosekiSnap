@@ -261,6 +261,8 @@ export function getSnowCostumeTransform(
   faceKeypoints: readonly TrackingPoint[],
   poseKeypoints: readonly TrackingPoint[],
   costumeAspectRatio: number,
+  faceHoleWidthRatio = COSTUME_FACE_HOLE_WIDTH_RATIO,
+  faceScale = SNOW_FACE_HOLE_SCALE,
 ): CostumeTransform {
   // The named points support the lightweight detector and the numeric indices
   // support MediaPipe FaceMesh (468 landmarks), which is used by the camera.
@@ -280,7 +282,7 @@ export function getSnowCostumeTransform(
     ? Math.hypot(leftEye.x - rightEye.x, leftEye.y - rightEye.y)
     : faceBox.width * 0.43
   const faceWidth = Math.max(faceBox.width, eyeDistance / 0.43)
-  const costumeWidth = (faceWidth * SNOW_FACE_HOLE_SCALE) / COSTUME_FACE_HOLE_WIDTH_RATIO
+  const costumeWidth = (faceWidth * faceScale) / faceHoleWidthRatio
   const costumeHeight = costumeWidth / costumeAspectRatio
 
   const eyeAngle = rightEye && leftEye

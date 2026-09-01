@@ -12,6 +12,8 @@ export function GuidancePage() {
     switch (id) {
       case 'kaikyokan':
         return '🐧'
+      case 'ganryujima':
+        return '⚔️'
       case 'akama':
         return '⛩️'
       case 'yumetower':

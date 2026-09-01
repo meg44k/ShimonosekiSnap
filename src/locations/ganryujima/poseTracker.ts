@@ -5,9 +5,9 @@ export interface HandPoseInfo {
   // 画面ピクセル座標
   pixelX: number
   pixelY: number
-  // 傾き角度 (ラジアン)
+  // 刀の回転角 (ラジアン, canvas用)
   angle: number
-  // スケール (腕長さに比例)
+  // スケール
   scale: number
   isGrasping: boolean
   score: number
@@ -75,7 +75,7 @@ export async function getImagePoseLandmarker(): Promise<PoseLandmarker | null> {
 }
 
 /**
- * 手首・肘・指先のランドマークから、手のひらの位置と傾きを計算
+ * 手首・肘・指先のランドマークから、手に対して垂直に刀を立てる構えを計算
  */
 function extractHandPoseFromLandmarks(
   _shoulder: NormalizedLandmark | undefined,
@@ -100,7 +100,7 @@ function extractHandPoseFromLandmarks(
     }
   }
 
-  // 1. 手首と指先から手のひら中央（平らな乗せ面）の位置を計算
+  // 1. 手首と指先から拳（手のひら中央）の位置を計算
   let palmNorm = { x: wrist.x, y: wrist.y }
   let graspSpread = 1.0
 
@@ -108,16 +108,16 @@ function extractHandPoseFromLandmarks(
     const knucklesX = (index.x + pinky.x) * 0.5
     const knucklesY = (index.y + pinky.y) * 0.5
     palmNorm = {
-      x: wrist.x * 0.35 + knucklesX * 0.65,
-      y: wrist.y * 0.35 + knucklesY * 0.65,
+      x: wrist.x * 0.38 + knucklesX * 0.62,
+      y: wrist.y * 0.38 + knucklesY * 0.62,
     }
     const handSpan = Math.hypot(index.x - wrist.x, index.y - wrist.y)
     const armSpan = Math.hypot(wrist.x - elbow.x, wrist.y - elbow.y) || 1
     graspSpread = handSpan / armSpan
   } else if (index && (index.visibility === undefined || index.visibility > 0.15)) {
     palmNorm = {
-      x: wrist.x * 0.4 + index.x * 0.6,
-      y: wrist.y * 0.4 + index.y * 0.6,
+      x: wrist.x * 0.42 + index.x * 0.58,
+      y: wrist.y * 0.42 + index.y * 0.58,
     }
   } else {
     const dirX = wrist.x - elbow.x
@@ -153,21 +153,30 @@ function extractHandPoseFromLandmarks(
     armDy = armDy * 0.3 + handDy * 0.7
   }
 
-  // 腕の傾き
+  // 腕の方向
   const armAngle = Math.atan2(armDy, armDx)
 
-  // 4. スケール（腕の長さに比例してペンギンのサイズを決定）
+  // 刀の垂直角度計算（手に対して垂直に立てる）
+  // 刀の元画像は直立(上向き)なので、腕の向きに応じた回転角を付与
+  let targetAngle = armAngle
+  if (isLeftHand) {
+    targetAngle = armDx < 0 ? armAngle + Math.PI : armAngle
+  } else {
+    targetAngle = armDx > 0 ? armAngle : armAngle + Math.PI
+  }
+
+  // 4. スケール（腕の長さに比例して刀の大きさを決定）
   const wristPixelX = wrist.x * imageWidth
   const wristPixelY = wrist.y * imageHeight
   const armLenPx = Math.hypot(wristPixelX - elbowPixelX, wristPixelY - elbowPixelY)
-  // 手のひらにちょこんと乗るサイズ（腕の長さの約1.2倍程度）
-  const targetScale = Math.max(0.3, Math.min(2.0, (armLenPx * 1.2) / 667))
+  // 刀の全長が腕の長さの約2.5〜3.0倍程度になるスケール
+  const targetScale = Math.max(0.35, Math.min(2.5, (armLenPx * 2.8) / 1052))
 
   return {
     detected: true,
     pixelX,
     pixelY,
-    angle: armAngle,
+    angle: targetAngle,
     scale: targetScale,
     isGrasping,
     score: wrist.visibility ?? 0.85,
@@ -175,7 +184,7 @@ function extractHandPoseFromLandmarks(
 }
 
 /**
- * 撮影した写真（静止画 Canvas / Image）から人物の手のひらの姿勢を検出する
+ * 撮影した写真（静止画 Canvas / Image）から人物の手の姿勢を検出する
  */
 export async function detectPoseOnImage(
   imageSource: HTMLCanvasElement | HTMLImageElement | ImageData,
@@ -189,8 +198,8 @@ export async function detectPoseOnImage(
       detected: false,
       pixelX: width * 0.7,
       pixelY: height * 0.65,
-      angle: 0,
-      scale: (height * 0.4) / 667,
+      angle: Math.PI / 12,
+      scale: (height * 0.65) / 1052,
       isGrasping: false,
       score: 0,
     },
@@ -198,8 +207,8 @@ export async function detectPoseOnImage(
       detected: false,
       pixelX: width * 0.3,
       pixelY: height * 0.65,
-      angle: 0,
-      scale: (height * 0.4) / 667,
+      angle: -Math.PI / 12,
+      scale: (height * 0.65) / 1052,
       isGrasping: false,
       score: 0,
     },

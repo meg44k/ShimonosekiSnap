@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
+import { savePhoto } from './features/ar/savePhoto'
 import { getLocation } from './locations'
 import type { LocationConfig } from './locations/types'
 import { GuidancePage, MODEL_CREDIT } from './pages/GuidancePage'
@@ -15,7 +16,15 @@ const PersonDetectionCameraView = lazy(() =>
 )
 
 const KaikyokanCameraView = lazy(() =>
-  import('./locations/kaikyokan/KaikyokanCameraView').then((module) => ({ default: module.KaikyokanCameraView })),
+  import('./locations/kaikyokan/KaikyokanCameraView').then((module) => ({
+    default: module.KaikyokanCameraView,
+  })),
+)
+
+const GanryuCameraView = lazy(() =>
+  import('./locations/ganryujima/GanryuCameraView').then((module) => ({
+    default: module.GanryuCameraView,
+  })),
 )
 
 const CompilePage = lazy(() =>
@@ -69,12 +78,14 @@ function App() {
 
   const downloadPhoto = useCallback(() => {
     if (!photoUrl || !location) return
-    const link = document.createElement('a')
-    link.href = photoUrl
     const now = new Date()
     const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
-    link.download = `shimonoseki_snap_${location.id}_${timestamp}.png`
-    link.click()
+    const filename = `shimonoseki_snap_${location.id}_${timestamp}.png`
+    // モバイル(iOS Safari 等)は <a download> が効かないため、Web Share API で
+    // OS の「写真に保存 / 共有」シートを開く。使えなければダウンロードに戻る。
+    savePhoto(photoUrl, filename).catch((error) => {
+      console.error('[save] failed to save photo', error)
+    })
   }, [photoUrl, location])
 
   if (route.type === 'compile') {
@@ -117,11 +128,13 @@ function App() {
   const locationIcon =
     location.id === 'kaikyokan'
       ? '🐧'
-      : location.id === 'akama'
-        ? '⛩️'
-        : location.id === 'yumetower'
-          ? '🗼'
-          : '🌊'
+      : location.id === 'ganryujima'
+        ? '⚔️'
+        : location.id === 'akama'
+          ? '⛩️'
+          : location.id === 'yumetower'
+            ? '🗼'
+            : '🌊'
 
   return (
     <div className="app">
@@ -176,6 +189,14 @@ function App() {
           <Suspense fallback={<div className="camera-screen" />}>
             {location.id === 'kaikyokan' ? (
               <KaikyokanCameraView
+                key={location.id}
+                location={location}
+                onCapture={handleCapture}
+                onClose={() => setState('idle')}
+                onError={handleArError}
+              />
+            ) : location.id === 'ganryujima' ? (
+              <GanryuCameraView
                 key={location.id}
                 location={location}
                 onCapture={handleCapture}

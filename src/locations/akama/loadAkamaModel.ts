@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import type { LoadedEffectModel } from '../types'
 import hoichiUrl from './miminashi_hoichi.png?url'
 import antokuUrl from './antoku_tenno.png?url'
 
@@ -18,7 +19,7 @@ function loadTexture(url: string): Promise<THREE.Texture> {
   })
 }
 
-export function loadAkamaModel(): Promise<THREE.Group> {
+export function loadAkamaModel(): Promise<LoadedEffectModel> {
   return Promise.all([loadTexture(hoichiUrl), loadTexture(antokuUrl)]).then(
     ([hoichiTexture, antokuTexture]) => {
       const group = new THREE.Group()
@@ -54,7 +55,7 @@ export function loadAkamaModel(): Promise<THREE.Group> {
       antokuMesh.position.set(0.35, -0.15, 0.02)
       group.add(antokuMesh)
 
-      return group
+      return { object: group }
     },
   )
 }
