@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { load as loadPoseDetector } from '@tensorflow-models/pose-detection/dist/movenet/detector'
-import { SINGLEPOSE_LIGHTNING } from '@tensorflow-models/pose-detection/dist/movenet/constants'
+import {
+  MULTIPOSE_LIGHTNING,
+  SINGLEPOSE_LIGHTNING,
+} from '@tensorflow-models/pose-detection/dist/movenet/constants'
 import type { PoseDetector } from '@tensorflow-models/pose-detection/dist/pose_detector'
 import type { FaceLandmarksDetector } from '@tensorflow-models/face-landmarks-detection/dist/face_landmarks_detector'
 import '@tensorflow/tfjs-backend-cpu'
@@ -11,6 +14,7 @@ import { useVideoCapture, type CompositeSources } from '../../features/ar/useVid
 import type { PersonDetectionLocationConfig } from '../types'
 import {
   type CostumeTransform,
+  type TrackingPoint,
   fitCostumeTransformToBody,
   getFixedBrandLayout,
   getSnowCostumeTransform,
@@ -86,6 +90,7 @@ export function PersonDetectionCameraView({
   const [subjectDetected, setSubjectDetected] = useState(false)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
   const costumeLayout = location.costumeLayout ?? DEFAULT_COSTUME_LAYOUT
+  const maxSubjects = Math.max(1, Math.min(4, location.maxSubjects ?? 1))
 
   useEffect(() => {
     const video = videoRef.current
@@ -103,8 +108,11 @@ export function PersonDetectionCameraView({
     let faceDetector: FaceLandmarksDetector | undefined
     let poseDetector: PoseDetector | undefined
     let lastDetectionAt = 0
-    let trackedCostumeTransform: CostumeTransform | undefined
-    let lastFaceSeenAt = 0
+    // 人物スロット(左→右で並べる)ごとの追従状態。すれ違い時はスロットが
+    // 入れ替わって衣装も入れ替わりうる(許容)。
+    const trackedTransforms: (CostumeTransform | undefined)[] = new Array(maxSubjects).fill(undefined)
+    const trackedPoses: TrackingPoint[][] = Array.from({ length: maxSubjects }, () => [])
+    const trackedSeenAt: number[] = new Array(maxSubjects).fill(0)
 
     async function start() {
       try {
@@ -125,7 +133,7 @@ export function PersonDetectionCameraView({
               location.costumeTransparentSeeds ?? COSTUME_TRANSPARENT_SEEDS,
             ),
             loadPoseDetector({
-              modelType: SINGLEPOSE_LIGHTNING,
+              modelType: maxSubjects > 1 ? MULTIPOSE_LIGHTNING : SINGLEPOSE_LIGHTNING,
               enableSmoothing: true,
             }),
           ])
@@ -153,7 +161,7 @@ export function PersonDetectionCameraView({
           .then(({ load }) =>
             load({
               runtime: 'tfjs',
-              maxFaces: 1,
+              maxFaces: maxSubjects,
               refineLandmarks: false,
             }),
           )
@@ -183,72 +191,123 @@ export function PersonDetectionCameraView({
                     })
                   : Promise.resolve([]),
                 loadedPoseDetector.estimatePoses(videoElement, {
-                  maxPoses: 1,
+                  maxPoses: maxSubjects,
                   flipHorizontal: false,
                 }),
               ])
               if (cancelled) return
 
-              const meshFace = faces[0]
-              const pose = poses[0]
-              const poseFace = poseToTrackedFace(pose?.keypoints ?? [])
-              const face = meshFace ?? poseFace
-              if (face) {
+              const aspect = costumeImage.width / costumeImage.height
+
+              // 各顔に最も近いポーズを割り当てる(肩の向き・体フィット用)
+              const usedPose = new Set<number>()
+              const nearestPose = (cx: number, cy: number): readonly TrackingPoint[] => {
+                let bestIdx = -1
+                let bestDist = Infinity
+                poses.forEach((p, i) => {
+                  if (usedPose.has(i)) return
+                  const nose = p.keypoints.find((k) => k.name === 'nose') ?? p.keypoints[0]
+                  if (!nose) return
+                  const d = Math.hypot(nose.x - cx, nose.y - cy)
+                  if (d < bestDist) {
+                    bestDist = d
+                    bestIdx = i
+                  }
+                })
+                if (bestIdx < 0) return []
+                usedPose.add(bestIdx)
+                return poses[bestIdx].keypoints
+              }
+
+              interface Subject {
+                transform: CostumeTransform
+                poseKeypoints: readonly TrackingPoint[]
+              }
+              const subjects: Subject[] = []
+
+              const buildSubject = (
+                box: Parameters<typeof getSnowCostumeTransform>[0],
+                faceKeypoints: readonly TrackingPoint[],
+                poseKeypoints: readonly TrackingPoint[],
+              ) => {
                 const faceTransform = getSnowCostumeTransform(
-                  face.box,
-                  face.keypoints,
-                  pose?.keypoints ?? [],
-                  costumeImage.width / costumeImage.height,
+                  box,
+                  faceKeypoints,
+                  poseKeypoints,
+                  aspect,
                   costumeLayout.faceHoleWidthRatio,
                   costumeLayout.faceScale,
                 )
-                const currentTransform = costumeLayout.bodyFit
-                  ? fitCostumeTransformToBody(
-                      faceTransform,
-                      pose?.keypoints ?? [],
-                      costumeImage.width / costumeImage.height,
-                      costumeLayout.bodyFit,
-                    )
-                  : faceTransform
-                trackedCostumeTransform = trackedCostumeTransform
-                  ? smoothCostumeTransform(trackedCostumeTransform, currentTransform)
-                  : currentTransform
-                lastFaceSeenAt = now
+                subjects.push({
+                  transform: costumeLayout.bodyFit
+                    ? fitCostumeTransformToBody(faceTransform, poseKeypoints, aspect, costumeLayout.bodyFit)
+                    : faceTransform,
+                  poseKeypoints,
+                })
               }
-              const costumeTransform =
-                face || now - lastFaceSeenAt <= FACE_TRACKING_HOLD_MS
-                  ? trackedCostumeTransform
-                  : undefined
-              const hasSubject = Boolean(costumeTransform)
-              context.clearRect(0, 0, canvasElement.width, canvasElement.height)
-              setSubjectDetected(hasSubject)
 
-              if (hasSubject) {
-                if (costumeTransform) {
-                  if (costumeLayout.renderer === 'textured-hanbok' && texturedTorso) {
-                    drawTexturedHanbok(
-                      context,
-                      costumeImage,
-                      texturedTorso,
-                      costumeTransform,
-                      pose?.keypoints ?? [],
-                      costumeLayout,
-                    )
-                  } else {
-                    context.save()
-                    context.translate(costumeTransform.anchorX, costumeTransform.anchorY)
-                    context.rotate(costumeTransform.rotation)
-                    context.drawImage(
-                      costumeImage,
-                      -costumeTransform.width * costumeLayout.faceHoleCenterXRatio,
-                      -costumeTransform.height * costumeLayout.faceHoleCenterYRatio,
-                      costumeTransform.width,
-                      costumeTransform.height,
-                    )
-                    context.restore()
-                  }
+              // 1) FaceMesh の顔(精度が高い)
+              for (const f of faces.slice(0, maxSubjects)) {
+                buildSubject(
+                  f.box,
+                  f.keypoints,
+                  nearestPose(f.box.xMin + f.box.width / 2, f.box.yMin + f.box.height / 2),
+                )
+              }
+              // 2) 顔が取れなかった人はポーズから推定(FaceMesh 未ロード/未検出時)
+              if (subjects.length < maxSubjects) {
+                for (let i = 0; i < poses.length && subjects.length < maxSubjects; i++) {
+                  if (usedPose.has(i)) continue
+                  const tf = poseToTrackedFace(poses[i].keypoints)
+                  if (tf) buildSubject(tf.box, tf.keypoints, poses[i].keypoints)
                 }
               }
+
+              // 左→右で並べてスロットに割り当てる(簡易トラッキング。すれ違い時に入れ替わりうる)
+              subjects.sort((a, b) => a.transform.anchorX - b.transform.anchorX)
+              for (let slot = 0; slot < maxSubjects; slot++) {
+                const subject = subjects[slot]
+                if (subject) {
+                  const prev = trackedTransforms[slot]
+                  trackedTransforms[slot] = prev
+                    ? smoothCostumeTransform(prev, subject.transform)
+                    : subject.transform
+                  trackedPoses[slot] = [...subject.poseKeypoints]
+                  trackedSeenAt[slot] = now
+                } else if (now - trackedSeenAt[slot] > FACE_TRACKING_HOLD_MS) {
+                  trackedTransforms[slot] = undefined
+                  trackedPoses[slot] = []
+                }
+              }
+
+              context.clearRect(0, 0, canvasElement.width, canvasElement.height)
+              setSubjectDetected(trackedTransforms.some(Boolean))
+
+              trackedTransforms.forEach((costumeTransform, slot) => {
+                if (!costumeTransform) return
+                if (costumeLayout.renderer === 'textured-hanbok' && texturedTorso) {
+                  drawTexturedHanbok(
+                    context,
+                    costumeImage,
+                    texturedTorso,
+                    costumeTransform,
+                    trackedPoses[slot],
+                    costumeLayout,
+                  )
+                } else {
+                  context.save()
+                  context.translate(costumeTransform.anchorX, costumeTransform.anchorY)
+                  context.rotate(costumeTransform.rotation)
+                  context.drawImage(
+                    costumeImage,
+                    -costumeTransform.width * costumeLayout.faceHoleCenterXRatio,
+                    -costumeTransform.height * costumeLayout.faceHoleCenterYRatio,
+                    costumeTransform.width,
+                    costumeTransform.height,
+                  )
+                  context.restore()
+                }
+              })
 
               const brand = getFixedBrandLayout(
                 canvasElement.width,
@@ -305,7 +364,7 @@ export function PersonDetectionCameraView({
       poseDetector?.dispose()
       videoElement.srcObject = null
     }
-  }, [costumeLayout, location, onError, facingMode])
+  }, [costumeLayout, location, maxSubjects, onError, facingMode])
 
   const getSources = useCallback((): CompositeSources | null => {
     const video = videoRef.current

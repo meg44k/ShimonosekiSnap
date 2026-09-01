@@ -18,4 +18,5 @@ export const karatoLocation: LocationConfig = {
     faceScale: 1.3,
   },
   detectionThreshold: 0.5,
+  maxSubjects: 3,
 }
