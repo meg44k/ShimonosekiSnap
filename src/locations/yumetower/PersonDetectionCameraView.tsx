@@ -299,7 +299,7 @@ export function PersonDetectionCameraView({
         <canvas ref={canvasRef} className="person-camera-layer person-overlay-canvas" />
         {(!ready || !subjectDetected) && (
           <div className="ar-status-overlay">
-            {!ready ? 'SNOW風フェイスフィルターを読み込み中...' : location.guidanceText}
+            {!ready ? 'フェイスフィルターを読み込み中...' : location.guidanceText}
           </div>
         )}
       </div>
