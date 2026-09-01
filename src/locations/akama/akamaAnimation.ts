@@ -6,6 +6,7 @@ export function getAkamaTransform(elapsedMs: number): ArTransform {
 
   return {
     position: [0, floatOffset, 0],
+    rotationX: 0,
     rotationY: 0,
     visible: true,
   }

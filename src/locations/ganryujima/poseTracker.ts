@@ -78,12 +78,12 @@ export async function getImagePoseLandmarker(): Promise<PoseLandmarker | null> {
  * 手首・肘・指先のランドマークから、手に対して垂直に刀を立てる構えを計算
  */
 function extractHandPoseFromLandmarks(
-  shoulder: NormalizedLandmark | undefined,
+  _shoulder: NormalizedLandmark | undefined,
   elbow: NormalizedLandmark | undefined,
   wrist: NormalizedLandmark | undefined,
   index: NormalizedLandmark | undefined,
   pinky: NormalizedLandmark | undefined,
-  thumb: NormalizedLandmark | undefined,
+  _thumb: NormalizedLandmark | undefined,
   imageWidth: number,
   imageHeight: number,
   isLeftHand: boolean,
