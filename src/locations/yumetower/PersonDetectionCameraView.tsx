@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { load as loadPoseDetector } from '@tensorflow-models/pose-detection/dist/movenet/detector'
 import { SINGLEPOSE_LIGHTNING } from '@tensorflow-models/pose-detection/dist/movenet/constants'
 import type { PoseDetector } from '@tensorflow-models/pose-detection/dist/pose_detector'
@@ -7,6 +7,8 @@ import type { FaceLandmarksDetector } from '@tensorflow-models/face-landmarks-de
 import '@tensorflow/tfjs-backend-cpu'
 import '@tensorflow/tfjs-backend-webgl'
 import { captureComposite } from '../../features/ar/captureComposite'
+import { CameraModeToggle, RecordingIndicator } from '../../features/ar/CameraControls'
+import { useVideoCapture, type CompositeSources } from '../../features/ar/useVideoCapture'
 import type { PersonDetectionLocationConfig } from '../types'
 import {
   type CostumeTransform,
@@ -24,7 +26,7 @@ import {
 
 interface PersonDetectionCameraViewProps {
   location: PersonDetectionLocationConfig
-  onCapture: (photoDataUrl: string) => void
+  onCapture: (url: string, kind?: 'photo' | 'video', blob?: Blob) => void
   onClose: () => void
   onError: (message: string) => void
 }
@@ -284,16 +286,35 @@ export function PersonDetectionCameraView({
     }
   }, [costumeLayout, location, onError, facingMode])
 
+  const getSources = useCallback((): CompositeSources | null => {
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas) return null
+    return { video, overlay: canvas, isMirror: false }
+  }, [])
+
+  const { videoSupported, mode, setMode, recording, elapsedSec, startRecording, stopRecording } =
+    useVideoCapture({
+      getSources,
+      onVideo: (url, blob) => onCapture(url, 'video', blob),
+      onError,
+    })
+
   const toggleFacing = () => {
-    setFacingMode((mode) => (mode === 'user' ? 'environment' : 'user'))
+    if (!recording) setFacingMode((current) => (current === 'user' ? 'environment' : 'user'))
   }
 
   const handleShutter = () => {
+    if (mode === 'video') {
+      if (recording) stopRecording()
+      else startRecording()
+      return
+    }
     const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas) return
     try {
-      onCapture(captureComposite(video, canvas))
+      onCapture(captureComposite(video, canvas), 'photo')
     } catch (error) {
       console.error(`[${location.id}] failed to capture photo`, error)
       onError('撮影に失敗しました')
@@ -305,32 +326,44 @@ export function PersonDetectionCameraView({
       <div className="video-container person-detection-container">
         <video ref={videoRef} className="person-camera-layer" muted playsInline />
         <canvas ref={canvasRef} className="person-camera-layer person-overlay-canvas" />
-        {(!ready || !subjectDetected) && (
+        {recording && <RecordingIndicator elapsedSec={elapsedSec} />}
+        {!recording && (!ready || !subjectDetected) && (
           <div className="ar-status-overlay">
             {!ready ? 'SNOW風フェイスフィルターを読み込み中...' : location.guidanceText}
           </div>
         )}
       </div>
+      {videoSupported && !recording && (
+        <CameraModeToggle mode={mode} onChange={setMode} disabled={!ready} />
+      )}
       <div className="camera-controls">
         <button
           type="button"
           className="btn btn-icon"
           onClick={toggleFacing}
-          disabled={!ready}
+          disabled={!ready || recording}
           title="イン/アウトカメラ切り替え"
         >
           🔄
         </button>
         <button
           type="button"
-          className="btn btn-shutter"
+          className={`btn btn-shutter${mode === 'video' ? ' is-video' : ''}${
+            recording ? ' is-recording' : ''
+          }`}
           onClick={handleShutter}
           disabled={!ready}
-          title="撮影"
+          title={mode === 'video' ? (recording ? '録画停止' : '録画開始') : '撮影'}
         >
           <span className="shutter-inner" />
         </button>
-        <button type="button" className="btn btn-icon" onClick={onClose} title="閉じる">
+        <button
+          type="button"
+          className="btn btn-icon"
+          onClick={onClose}
+          disabled={recording}
+          title="閉じる"
+        >
           ✕
         </button>
       </div>

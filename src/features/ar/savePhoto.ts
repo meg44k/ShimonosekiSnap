@@ -45,36 +45,58 @@ export function dataUrlToBlob(dataUrl: string): Blob {
  * - `downloaded` … <a download> でダウンロードした(デスクトップ等)
  * - `cancelled`  … 共有シートをユーザーが閉じた
  */
+function resolveNavigator(deps: SavePhotoDeps): ShareCapableNavigator | null {
+  if (deps.navigator !== undefined) return deps.navigator
+  return typeof navigator !== 'undefined' ? (navigator as ShareCapableNavigator) : null
+}
+
+async function shareOrDownload(
+  file: File,
+  href: string,
+  filename: string,
+  deps: SavePhotoDeps,
+): Promise<SaveOutcome> {
+  const nav = resolveNavigator(deps)
+  if (nav?.share && nav.canShare && nav.canShare({ files: [file] })) {
+    try {
+      await nav.share({ files: [file], title: filename })
+      return 'shared'
+    } catch (error) {
+      // シートを閉じただけなら失敗ではない
+      if (error instanceof Error && error.name === 'AbortError') return 'cancelled'
+      // それ以外(NotAllowedError 等)は下のダウンロードへフォールバック
+    }
+  }
+
+  const anchor = deps.createAnchor?.() ?? document.createElement('a')
+  anchor.href = href
+  anchor.download = filename
+  anchor.rel = 'noopener'
+  anchor.click()
+  return 'downloaded'
+}
+
+/** 写真(PNG の data URL)を保存する。savePhoto の戻り値は取られた経路 */
 export async function savePhoto(
   dataUrl: string,
   filename: string,
   deps: SavePhotoDeps = {},
 ): Promise<SaveOutcome> {
-  const nav =
-    deps.navigator === undefined
-      ? typeof navigator !== 'undefined'
-        ? (navigator as ShareCapableNavigator)
-        : null
-      : deps.navigator
+  const file = new File([dataUrlToBlob(dataUrl)], filename, { type: 'image/png' })
+  return shareOrDownload(file, dataUrl, filename, deps)
+}
 
-  if (nav?.share && nav.canShare) {
-    const file = new File([dataUrlToBlob(dataUrl)], filename, { type: 'image/png' })
-    if (nav.canShare({ files: [file] })) {
-      try {
-        await nav.share({ files: [file], title: filename })
-        return 'shared'
-      } catch (error) {
-        // シートを閉じただけなら失敗ではない
-        if (error instanceof Error && error.name === 'AbortError') return 'cancelled'
-        // それ以外(NotAllowedError 等)は下のダウンロードへフォールバック
-      }
-    }
+/** 録画した動画(Blob)を保存する。ダウンロード経路では一時 blob URL を使う */
+export async function saveVideo(
+  blob: Blob,
+  filename: string,
+  deps: SavePhotoDeps = {},
+): Promise<SaveOutcome> {
+  const file = new File([blob], filename, { type: blob.type || 'video/mp4' })
+  const href = URL.createObjectURL(blob)
+  try {
+    return await shareOrDownload(file, href, filename, deps)
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(href), 60_000)
   }
-
-  const anchor = deps.createAnchor?.() ?? document.createElement('a')
-  anchor.href = dataUrl
-  anchor.download = filename
-  anchor.rel = 'noopener'
-  anchor.click()
-  return 'downloaded'
 }

@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
-import { savePhoto } from './features/ar/savePhoto'
+import { savePhoto, saveVideo } from './features/ar/savePhoto'
 import { getLocation } from './locations'
 import type { LocationConfig } from './locations/types'
 import { GuidancePage, MODEL_CREDIT } from './pages/GuidancePage'
@@ -46,24 +46,38 @@ function App() {
   const location = route.type === 'spot' ? getLocation(route.id) ?? null : null
 
   const [state, setState] = useState<AppState>('idle')
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [capture, setCapture] = useState<{
+    url: string
+    kind: 'photo' | 'video'
+    blob?: Blob
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const clearCapture = useCallback(() => {
+    setCapture((prev) => {
+      if (prev?.kind === 'video') URL.revokeObjectURL(prev.url)
+      return null
+    })
+  }, [])
 
   // ルートまたはロケーションが変化したときにカメラ起動状態へ遷移
   useEffect(() => {
     setError(null)
-    setPhotoUrl(null)
+    clearCapture()
     if (location) {
       setState('camera')
     } else {
       setState('idle')
     }
-  }, [location])
+  }, [location, clearCapture])
 
-  const handleCapture = useCallback((dataUrl: string) => {
-    setPhotoUrl(dataUrl)
-    setState('preview')
-  }, [])
+  const handleCapture = useCallback(
+    (url: string, kind: 'photo' | 'video' = 'photo', blob?: Blob) => {
+      setCapture({ url, kind, blob })
+      setState('preview')
+    },
+    [],
+  )
 
   const handleArError = useCallback((message: string) => {
     setError(message)
@@ -71,22 +85,26 @@ function App() {
   }, [])
 
   const retake = useCallback(() => {
-    setPhotoUrl(null)
+    clearCapture()
     setError(null)
     setState('camera')
-  }, [])
+  }, [clearCapture])
 
-  const downloadPhoto = useCallback(() => {
-    if (!photoUrl || !location) return
+  const saveCapture = useCallback(() => {
+    if (!capture || !location) return
     const now = new Date()
     const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
-    const filename = `shimonoseki_snap_${location.id}_${timestamp}.png`
+    const base = `shimonoseki_snap_${location.id}_${timestamp}`
     // モバイル(iOS Safari 等)は <a download> が効かないため、Web Share API で
     // OS の「写真に保存 / 共有」シートを開く。使えなければダウンロードに戻る。
-    savePhoto(photoUrl, filename).catch((error) => {
-      console.error('[save] failed to save photo', error)
-    })
-  }, [photoUrl, location])
+    const done = (error: unknown) => console.error('[save] failed to save capture', error)
+    if (capture.kind === 'video' && capture.blob) {
+      const ext = capture.blob.type.includes('mp4') ? 'mp4' : 'webm'
+      saveVideo(capture.blob, `${base}.${ext}`).catch(done)
+    } else {
+      savePhoto(capture.url, `${base}.png`).catch(done)
+    }
+  }, [capture, location])
 
   if (route.type === 'compile') {
     return (
@@ -223,16 +241,28 @@ function App() {
           </Suspense>
         )}
 
-        {state === 'preview' && photoUrl && (
+        {state === 'preview' && capture && (
           <div className="preview-screen">
             <div className="photo-container">
-              <img src={photoUrl} alt="撮影した写真" className="preview-photo" />
+              {capture.kind === 'video' ? (
+                <video
+                  src={capture.url}
+                  className="preview-photo"
+                  controls
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                />
+              ) : (
+                <img src={capture.url} alt="撮影した写真" className="preview-photo" />
+              )}
             </div>
             <div className="preview-controls">
               <button type="button" className="btn btn-secondary" onClick={retake}>
-                📷 撮り直す
+                {capture.kind === 'video' ? '🎥 撮り直す' : '📷 撮り直す'}
               </button>
-              <button type="button" className="btn btn-primary" onClick={downloadPhoto}>
+              <button type="button" className="btn btn-primary" onClick={saveCapture}>
                 💾 保存する
               </button>
             </div>

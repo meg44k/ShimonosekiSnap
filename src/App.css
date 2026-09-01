@@ -220,6 +220,89 @@
   height: 54px;
   border-radius: 50%;
   background: #fff;
+  transition: all 0.15s ease;
+}
+
+/* 動画モード: 中の丸を赤くする。録画中は赤い四角(停止) */
+.btn.btn-shutter.is-video .shutter-inner {
+  background: #ff3b30;
+}
+
+.btn.btn-shutter.is-recording .shutter-inner {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: #ff3b30;
+}
+
+/* 写真 / 動画 モード切替(シャッターの少し上、中央) */
+.camera-mode-toggle {
+  position: absolute;
+  bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  z-index: 11;
+}
+
+.camera-mode-toggle button {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.camera-mode-toggle button.is-active {
+  background: #fff;
+  color: #111;
+}
+
+.camera-mode-toggle button:disabled {
+  opacity: 0.4;
+}
+
+/* 録画中インジケータ(画面上部中央、赤丸＋経過時間) */
+.recording-indicator {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  z-index: 11;
+}
+
+.recording-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff3b30;
+  animation: recording-blink 1s steps(1, end) infinite;
+}
+
+@keyframes recording-blink {
+  50% {
+    opacity: 0.2;
+  }
 }
 
 .btn.btn-icon {
