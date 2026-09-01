@@ -1,4 +1,3 @@
-import basicSsl from '@vitejs/plugin-basic-ssl'
 import react from '@vitejs/plugin-react'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -34,7 +33,11 @@ function saveTargetPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), basicSsl(), saveTargetPlugin()],
+  plugins: [react(), saveTargetPlugin()],
+  server: {
+    // Allow phones and tablets on the same Wi-Fi to reach the local camera app.
+    host: '0.0.0.0',
+  },
   resolve: {
     alias: [
       {
