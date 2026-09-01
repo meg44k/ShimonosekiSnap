@@ -321,37 +321,70 @@
   cursor: pointer;
 }
 
-/* ===== Preview Screen ===== */
+/* ===== Preview Screen =====
+   カメラ画面(.camera-screen)と同じ「全画面・黒・下部バー」に揃えて、
+   撮影 → プレビューで画面がガラッと変わらないようにする。 */
 .preview-screen {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 100;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  width: 100%;
-  max-width: 480px;
+  user-select: none;
+  animation: preview-fade-in 0.16s ease-out;
 }
 
+@keyframes preview-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* カメラの .video-container と同じ「残り全部を埋める」枠 */
 .photo-container {
-  width: 100%;
-  border-radius: 16px;
+  flex: 1;
+  min-height: 0;
+  position: relative;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .preview-photo {
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: contain;
   display: block;
 }
 
+/* カメラの .camera-controls と同じ下部バー */
 .preview-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
-  gap: 16px;
-  width: 100%;
+  gap: 12px;
+  padding: 24px 24px calc(24px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.75), transparent);
+  z-index: 10;
 }
 
 .preview-controls .btn {
   flex: 1;
+}
+
+.preview-controls .btn-secondary {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(8px);
+}
+
+.preview-controls .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.24);
 }
 
 /* ===== Buttons ===== */
