@@ -25,7 +25,7 @@ export function KaikyokanCameraView({ onCapture, onClose, onError }: KaikyokanCa
 
   const [cameraReady, setCameraReady] = useState<boolean>(false)
   const [isProcessing, setIsProcessing] = useState<boolean>(false)
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
 
   // ペンギン画像のプリロード
   useEffect(() => {
