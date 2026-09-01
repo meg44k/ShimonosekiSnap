@@ -174,9 +174,24 @@
   padding: 24px 32px calc(24px + env(safe-area-inset-bottom, 0px));
   display: flex;
   align-items: center;
-  justify-content: space-around;
+  /* シャッターを常に画面中央へ。閉じる/カメラ切替などの丸アイコンは
+     フローから外して端に固定し、シャッターの中央寄せに影響させない。 */
+  justify-content: center;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
   z-index: 10;
+}
+
+.camera-controls .btn-icon {
+  position: absolute;
+  top: 50%;
+  right: 32px;
+  transform: translateY(-50%);
+}
+
+/* 3 ボタン構成(カメラ切替 + シャッター + 閉じる)のとき、先頭のアイコンは左側へ */
+.camera-controls .btn-icon:first-child {
+  right: auto;
+  left: 32px;
 }
 
 /* `.btn` の共通ルール(padding: 12px 24px 等)がこの後に定義されており、
