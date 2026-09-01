@@ -376,10 +376,21 @@
   flex: 1;
 }
 
+/* カメラ画面の白いシャッターに合わせて白系で統一する。
+   保存する = 主アクション(不透明の白)、撮り直す = 副アクション(半透明の白枠)。 */
+.preview-controls .btn-primary {
+  background: #fff;
+  color: #111;
+}
+
+.preview-controls .btn-primary:hover {
+  background: rgba(255, 255, 255, 0.88);
+}
+
 .preview-controls .btn-secondary {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.14);
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   backdrop-filter: blur(8px);
 }
 
