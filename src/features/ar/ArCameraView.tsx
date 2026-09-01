@@ -23,15 +23,22 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
   const captureRequestedRef = useRef(false)
   const [ready, setReady] = useState(false)
   const [targetFound, setTargetFound] = useState(false)
+  // マーカー型ARは基本アウトカメラ(パネルに向ける)。イン/アウトは手動切替可能。
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
 
   useEffect(() => {
     if (!containerRef.current) return
     let cancelled = false
     let started = false
+    // 切替時はセットアップをやり直すので状態をリセットして「起動中」を出す
+    setReady(false)
+    setTargetFound(false)
 
     const mindarThree = new MindARThree({
       container: containerRef.current,
       imageTargetSrc: `${import.meta.env.BASE_URL}${location.targetSrc}`,
+      // MindARThree は 'user' / 'environment' の facingMode をサポートする
+      facingMode,
       uiLoading: 'no',
       uiScanning: 'no',
       uiError: 'no',
@@ -254,10 +261,14 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
       lineArt?.dispose()
       mindarRef.current = null
     }
-  }, [location, onError])
+  }, [location, onError, facingMode])
 
   const handleShutter = () => {
     captureRequestedRef.current = true
+  }
+
+  const toggleFacing = () => {
+    setFacingMode((mode) => (mode === 'user' ? 'environment' : 'user'))
   }
 
   return (
@@ -269,6 +280,15 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
         )}
       </div>
       <div className="camera-controls">
+        <button
+          type="button"
+          className="btn btn-icon"
+          onClick={toggleFacing}
+          disabled={!ready}
+          title="イン/アウトカメラ切り替え"
+        >
+          🔄
+        </button>
         <button
           type="button"
           className="btn btn-shutter"

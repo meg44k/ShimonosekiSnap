@@ -25,7 +25,7 @@ export function GanryuCameraView({ onCapture, onClose, onError }: GanryuCameraVi
 
   const [cameraReady, setCameraReady] = useState<boolean>(false)
   const [isProcessing, setIsProcessing] = useState<boolean>(false)
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
 
   // 刀画像のプリロード
   useEffect(() => {

@@ -83,6 +83,7 @@ export function PersonDetectionCameraView({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [ready, setReady] = useState(false)
   const [subjectDetected, setSubjectDetected] = useState(false)
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
   const costumeLayout = location.costumeLayout ?? DEFAULT_COSTUME_LAYOUT
 
   useEffect(() => {
@@ -93,6 +94,9 @@ export function PersonDetectionCameraView({
     const canvasElement = canvas
 
     let cancelled = false
+    // 切替時は読み込みからやり直すので状態をリセットして案内を出す
+    setReady(false)
+    setSubjectDetected(false)
     let animationFrameId = 0
     let stream: MediaStream | undefined
     let faceDetector: FaceLandmarksDetector | undefined
@@ -105,7 +109,7 @@ export function PersonDetectionCameraView({
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
-          video: { facingMode: { ideal: 'environment' } },
+          video: { facingMode: { ideal: facingMode } },
         })
         const [overlayImage, costumeImage, loadedFaceDetector, loadedPoseDetector] =
           await Promise.all([
@@ -278,7 +282,11 @@ export function PersonDetectionCameraView({
       poseDetector?.dispose()
       videoElement.srcObject = null
     }
-  }, [costumeLayout, location, onError])
+  }, [costumeLayout, location, onError, facingMode])
+
+  const toggleFacing = () => {
+    setFacingMode((mode) => (mode === 'user' ? 'environment' : 'user'))
+  }
 
   const handleShutter = () => {
     const video = videoRef.current
@@ -304,6 +312,15 @@ export function PersonDetectionCameraView({
         )}
       </div>
       <div className="camera-controls">
+        <button
+          type="button"
+          className="btn btn-icon"
+          onClick={toggleFacing}
+          disabled={!ready}
+          title="イン/アウトカメラ切り替え"
+        >
+          🔄
+        </button>
         <button
           type="button"
           className="btn btn-shutter"
