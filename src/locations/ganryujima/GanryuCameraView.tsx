@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { LocationConfig } from '../types'
 import { detectPoseOnImage, getImagePoseLandmarker } from './poseTracker'
-import katanaImgUrl from './katana_upright.png'
+import katanaImgUrl from './katana_upright.png?url'
 
 // 刀画像のサイズと柄の握り手アンカー座標 (katana_meta.json に準拠)
 const KATANA_META = {
