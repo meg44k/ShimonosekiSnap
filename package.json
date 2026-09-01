@@ -32,5 +32,8 @@
     "typescript": "~6.0.2",
     "vite": "^8.2.2",
     "vitest": "^3.2.7"
+  },
+  "overrides": {
+    "canvas": "npm:empty-npm-package@1.0.0"
   }
 }
