@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { LocationConfig } from '../types'
 import { detectPoseOnImage, getImagePoseLandmarker } from './poseTracker'
-import penguinImgUrl from './penguin.png'
+import penguinImgUrl from './penguin.png?url'
 
 // ペンギン画像のサイズと足元アンカー座標 (下端中央: 320, 660)
 const PENGUIN_META = {
