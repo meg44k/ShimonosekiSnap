@@ -101,6 +101,28 @@
   justify-content: center;
 }
 
+/* MindAR が <video>/<canvas> を注入するコンテナ。サイズ指定が無いと 0x0 に
+   潰れてカメラ映像が真っ黒になる。MindAR は <video> にインラインで
+   z-index:-2 を付けるため、このコンテナ自身が独立したスタッキング
+   コンテキストを持たないと video がページ背景の下に沈む。z-index を
+   明示してスタッキングコンテキストを作る。 */
+.ar-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.ar-container video,
+.ar-container canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .camera-video {
   width: 100%;
   height: 100%;
@@ -157,7 +179,10 @@
   z-index: 10;
 }
 
-.btn-shutter {
+/* `.btn` の共通ルール(padding: 12px 24px 等)がこの後に定義されており、
+   セレクタ特異度が同じだと後勝ちで padding を上書きされてしまう。
+   `.btn.btn-shutter` / `.btn.btn-icon` と特異度を上げて確実に勝たせる。 */
+.btn.btn-shutter {
   width: 72px;
   height: 72px;
   border-radius: 50%;
@@ -171,7 +196,7 @@
   transition: transform 0.1s ease;
 }
 
-.btn-shutter:active {
+.btn.btn-shutter:active {
   transform: scale(0.92);
 }
 
@@ -182,9 +207,10 @@
   background: #fff;
 }
 
-.btn-icon {
+.btn.btn-icon {
   width: 44px;
   height: 44px;
+  padding: 0;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(8px);
