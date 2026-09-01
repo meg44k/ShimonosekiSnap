@@ -39,13 +39,26 @@ describe('locations registry', () => {
     expect(getLocation('nonexistent')).toBeUndefined()
   })
 
-  it('lists all registered locations, including tsunoshima, akama, yumetower, karato, and ganryujima', () => {
+  it('lists all registered locations, including tsunoshima, akama, yumetower, karato, hinoyama, and ganryujima', () => {
     const locations = listLocations()
     expect(locations.some((location) => location.id === 'tsunoshima')).toBe(true)
     expect(locations.some((location) => location.id === 'akama')).toBe(true)
     expect(locations.some((location) => location.id === 'yumetower')).toBe(true)
     expect(locations.some((location) => location.id === 'karato')).toBe(true)
+    expect(locations.some((location) => location.id === 'hinoyama')).toBe(true)
     expect(locations.some((location) => location.id === 'ganryujima')).toBe(true)
+  })
+
+  it('registers hinoyama as an image-target night-scene location', () => {
+    const location = getLocation('hinoyama')
+    expect(location?.name).toBe('火の山公園')
+    expect(location?.cameraMode).toBe('image-target')
+    if (location?.cameraMode === 'image-target') {
+      expect(location.targetSrc).toBe('targets/hinoyama.mind')
+      // 動く主役がいないので getTransform は常に可視の定数を返す
+      expect(location.effect.getTransform(0).visible).toBe(true)
+      expect(location.effect.getTransform(9999)).toEqual(location.effect.getTransform(0))
+    }
   })
 
   it('registers karato with the fugu face filter', () => {
