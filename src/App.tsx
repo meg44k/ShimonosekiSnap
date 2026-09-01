@@ -156,7 +156,7 @@ function App() {
 
   return (
     <div className="app">
-      {state !== 'camera' && (
+      {state !== 'camera' && state !== 'preview' && (
         <header className="app-header">
           <h1
             style={{ cursor: 'pointer' }}
@@ -245,10 +245,11 @@ function App() {
           <div className="preview-screen">
             <div className="photo-container">
               {capture.kind === 'video' ? (
+                // 音声トラックは無い(canvas ストリーム録画)。短いループ再生で
+                // カメラ画面と地続きな見た目にするため controls は出さない。
                 <video
                   src={capture.url}
                   className="preview-photo"
-                  controls
                   autoPlay
                   loop
                   muted
