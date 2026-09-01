@@ -23,22 +23,15 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
   const captureRequestedRef = useRef(false)
   const [ready, setReady] = useState(false)
   const [targetFound, setTargetFound] = useState(false)
-  // マーカー型ARは基本アウトカメラ(パネルに向ける)。イン/アウトは手動切替可能。
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
 
   useEffect(() => {
     if (!containerRef.current) return
     let cancelled = false
     let started = false
-    // 切替時はセットアップをやり直すので状態をリセットして「起動中」を出す
-    setReady(false)
-    setTargetFound(false)
 
     const mindarThree = new MindARThree({
       container: containerRef.current,
       imageTargetSrc: `${import.meta.env.BASE_URL}${location.targetSrc}`,
-      // MindARThree は 'user' / 'environment' の facingMode をサポートする
-      facingMode,
       uiLoading: 'no',
       uiScanning: 'no',
       uiError: 'no',
@@ -49,6 +42,9 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
       filterMinCF: 0.0001,
       filterBeta: 2000,
     })
+    // MindARThree はコンストラクタに facingMode オプションを持たず、
+    // `shouldFaceUser`(既定 false=背面カメラ)でカメラを選ぶ。マーカー型ARは
+    // 背面が既定でよいので初期値はそのまま。切替は switchCamera() で行う。
     mindarRef.current = mindarThree
     let lineArt: LineArtRenderer | null = null
     let resizeCleanup: (() => void) | null = null
@@ -261,14 +257,16 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
       lineArt?.dispose()
       mindarRef.current = null
     }
-  }, [location, onError, facingMode])
+  }, [location, onError])
 
   const handleShutter = () => {
     captureRequestedRef.current = true
   }
 
+  // MindARThree 公式の switchCamera() は shouldFaceUser を反転して stop()→start()
+  // する(同一インスタンスを再利用するのでレンダラ/アンカーの作り直しは無い)。
   const toggleFacing = () => {
-    setFacingMode((mode) => (mode === 'user' ? 'environment' : 'user'))
+    if (ready) mindarRef.current?.switchCamera()
   }
 
   return (
