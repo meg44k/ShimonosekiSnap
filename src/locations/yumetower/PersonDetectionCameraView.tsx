@@ -26,15 +26,6 @@ interface PersonDetectionCameraViewProps {
 
 const DETECTION_INTERVAL_MS = 120
 const FACE_TRACKING_HOLD_MS = 800
-const COSTUME_FACE_HOLE_CENTER_X_RATIO = 0.5
-const COSTUME_FACE_HOLE_CENTER_Y_RATIO = 0.315
-const BRAND_LABEL = '海峡ゆめタワー'
-const COSTUME_TRANSPARENT_SEEDS = [
-  { xRatio: 0.5, yRatio: 0.32 },
-  { xRatio: 0.2, yRatio: 0.57 },
-  { xRatio: 0.8, yRatio: 0.57 },
-  { xRatio: 0.5, yRatio: 0.85 },
-]
 
 function loadCutout(
   src: string,
@@ -97,7 +88,7 @@ export function PersonDetectionCameraView({
         const [overlayImage, costumeImage, loadedFaceDetector, loadedPoseDetector] =
           await Promise.all([
             loadCutout(location.overlaySrc),
-            loadCutout(location.costumeSrc, COSTUME_TRANSPARENT_SEEDS),
+            loadCutout(location.costumeSrc, location.costumeTransparentSeeds),
             loadFaceLandmarksDetector({
               runtime: 'tfjs',
               maxFaces: 1,
@@ -152,6 +143,8 @@ export function PersonDetectionCameraView({
                   face.keypoints,
                   pose?.keypoints ?? [],
                   costumeImage.width / costumeImage.height,
+                  location.costumeLayout.faceHoleWidthRatio,
+                  location.costumeLayout.faceScale,
                 )
                 trackedCostumeTransform = trackedCostumeTransform
                   ? smoothCostumeTransform(trackedCostumeTransform, currentTransform)
@@ -173,8 +166,8 @@ export function PersonDetectionCameraView({
                   context.rotate(costumeTransform.rotation)
                   context.drawImage(
                     costumeImage,
-                    -costumeTransform.width * COSTUME_FACE_HOLE_CENTER_X_RATIO,
-                    -costumeTransform.height * COSTUME_FACE_HOLE_CENTER_Y_RATIO,
+                    -costumeTransform.width * location.costumeLayout.faceHoleCenterXRatio,
+                    -costumeTransform.height * location.costumeLayout.faceHoleCenterYRatio,
                     costumeTransform.width,
                     costumeTransform.height,
                   )
@@ -189,13 +182,15 @@ export function PersonDetectionCameraView({
                 canvasElement.clientHeight,
                 overlayImage.width / overlayImage.height,
               )
-              context.drawImage(
-                overlayImage,
-                brand.image.x,
-                brand.image.y,
-                brand.image.width,
-                brand.image.height,
-              )
+              if (location.showBrandImage !== false) {
+                context.drawImage(
+                  overlayImage,
+                  brand.image.x,
+                  brand.image.y,
+                  brand.image.width,
+                  brand.image.height,
+                )
+              }
               context.save()
               context.font = `700 ${brand.fontSize}px sans-serif`
               context.textAlign = 'left'
@@ -204,19 +199,19 @@ export function PersonDetectionCameraView({
               context.lineJoin = 'round'
               context.strokeStyle = 'rgba(0, 0, 0, 0.78)'
               context.fillStyle = '#ffffff'
-              context.strokeText(BRAND_LABEL, brand.textX, brand.textBaselineY)
-              context.fillText(BRAND_LABEL, brand.textX, brand.textBaselineY)
+              context.strokeText(location.brandLabel, brand.textX, brand.textBaselineY)
+              context.fillText(location.brandLabel, brand.textX, brand.textBaselineY)
               context.restore()
             }
             animationFrameId = requestAnimationFrame(detect)
           } catch (error) {
-            console.error('[yumetower] face filter stopped', error)
+            console.error(`[${location.id}] face filter stopped`, error)
             if (!cancelled) onError('顔フィルター処理中にエラーが発生しました')
           }
         }
         animationFrameId = requestAnimationFrame(detect)
       } catch (error) {
-        console.error('[yumetower] failed to start face filter', error)
+        console.error(`[${location.id}] failed to start face filter`, error)
         if (!cancelled) {
           onError(
             '顔フィルターを起動できませんでした。カメラの許可と通信環境を確認してください。',
@@ -244,7 +239,7 @@ export function PersonDetectionCameraView({
     try {
       onCapture(captureComposite(video, canvas))
     } catch (error) {
-      console.error('[yumetower] failed to capture photo', error)
+      console.error(`[${location.id}] failed to capture photo`, error)
       onError('撮影に失敗しました')
     }
   }

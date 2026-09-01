@@ -39,12 +39,25 @@ describe('locations registry', () => {
     expect(getLocation('nonexistent')).toBeUndefined()
   })
 
-  it('lists all registered locations, including tsunoshima, akama, yumetower, and ganryujima', () => {
+  it('lists all registered locations, including tsunoshima, akama, yumetower, karato, and ganryujima', () => {
     const locations = listLocations()
     expect(locations.some((location) => location.id === 'tsunoshima')).toBe(true)
     expect(locations.some((location) => location.id === 'akama')).toBe(true)
     expect(locations.some((location) => location.id === 'yumetower')).toBe(true)
+    expect(locations.some((location) => location.id === 'karato')).toBe(true)
     expect(locations.some((location) => location.id === 'ganryujima')).toBe(true)
+  })
+
+  it('registers karato with the fugu face filter', () => {
+    const location = getLocation('karato')
+    expect(location?.name).toBe('唐戸市場')
+    expect(location?.cameraMode).toBe('person-detection')
+    if (location?.cameraMode === 'person-detection') {
+      expect(location.brandLabel).toBe('唐戸市場')
+      expect(location.showBrandImage).toBe(true)
+      expect(location.overlaySrc).toContain('karato-character.png')
+      expect(location.costumeSrc).toContain('fugu-hat.png')
+    }
   })
 
   it('has no duplicate ids among registered locations', () => {
