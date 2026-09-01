@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { load as loadPoseDetector } from '@tensorflow-models/pose-detection/dist/movenet/detector'
 import { SINGLEPOSE_LIGHTNING } from '@tensorflow-models/pose-detection/dist/movenet/constants'
 import type { PoseDetector } from '@tensorflow-models/pose-detection/dist/pose_detector'
-import { load as loadFaceLandmarksDetector } from '@tensorflow-models/face-landmarks-detection/dist/tfjs/detector'
 import type { FaceLandmarksDetector } from '@tensorflow-models/face-landmarks-detection/dist/face_landmarks_detector'
 import '@tensorflow/tfjs-backend-cpu'
 import '@tensorflow/tfjs-backend-webgl'
@@ -107,24 +106,23 @@ export function PersonDetectionCameraView({
           audio: false,
           video: { facingMode: { ideal: 'environment' } },
         })
-        const [overlayImage, costumeImage, loadedFaceDetector, loadedPoseDetector] =
+        // Show the live camera immediately. The detection models continue to load
+        // in the background instead of blocking the first visual response.
+        videoElement.srcObject = stream
+        await videoElement.play()
+
+        const [overlayImage, costumeImage, loadedPoseDetector] =
           await Promise.all([
             loadCutout(location.overlaySrc),
             loadCutout(
               location.costumeSrc,
               location.costumeTransparentSeeds ?? COSTUME_TRANSPARENT_SEEDS,
             ),
-            loadFaceLandmarksDetector({
-              runtime: 'tfjs',
-              maxFaces: 1,
-              refineLandmarks: false,
-            }),
             loadPoseDetector({
               modelType: SINGLEPOSE_LIGHTNING,
               enableSmoothing: true,
             }),
           ])
-        faceDetector = loadedFaceDetector
         poseDetector = loadedPoseDetector
         const texturedTorso =
           costumeLayout.renderer === 'textured-hanbok'
@@ -132,18 +130,39 @@ export function PersonDetectionCameraView({
             : undefined
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop())
-          loadedFaceDetector.dispose()
           loadedPoseDetector.dispose()
           return
         }
 
-        videoElement.srcObject = stream
-        await videoElement.play()
         canvasElement.width = videoElement.videoWidth
         canvasElement.height = videoElement.videoHeight
         const context = canvasElement.getContext('2d')
         if (!context) throw new Error('2D context is not available')
         setReady(true)
+
+        // MoveNet provides enough facial keypoints to begin costume tracking.
+        // Load the heavier FaceMesh detector only after the camera and the
+        // first-pass filter are available, then upgrade the tracking precision.
+        void import('@tensorflow-models/face-landmarks-detection/dist/tfjs/detector')
+          .then(({ load }) =>
+            load({
+              runtime: 'tfjs',
+              maxFaces: 1,
+              refineLandmarks: false,
+            }),
+          )
+          .then((loadedFaceDetector) => {
+            if (cancelled) {
+              loadedFaceDetector.dispose()
+              return
+            }
+            faceDetector = loadedFaceDetector
+          })
+          .catch((error: unknown) => {
+            // Keep the filter usable with MoveNet facial keypoints when the
+            // optional precision model cannot be loaded.
+            console.warn(`[${location.id}] FaceMesh enhancement unavailable`, error)
+          })
 
         const detect = async (now: number) => {
           if (cancelled) return
@@ -151,10 +170,12 @@ export function PersonDetectionCameraView({
             if (now - lastDetectionAt >= DETECTION_INTERVAL_MS) {
               lastDetectionAt = now
               const [faces, poses] = await Promise.all([
-                loadedFaceDetector.estimateFaces(videoElement, {
-                  flipHorizontal: false,
-                  staticImageMode: false,
-                }),
+                faceDetector
+                  ? faceDetector.estimateFaces(videoElement, {
+                      flipHorizontal: false,
+                      staticImageMode: false,
+                    })
+                  : Promise.resolve([]),
                 loadedPoseDetector.estimatePoses(videoElement, {
                   maxPoses: 1,
                   flipHorizontal: false,
