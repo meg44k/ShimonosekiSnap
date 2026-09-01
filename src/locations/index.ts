@@ -1,3 +1,4 @@
+import { greenmallLocation } from './greenmall'
 import { akamaLocation } from './akama'
 import { ganryujimaLocation } from './ganryujima'
 import { hinoyamaLocation } from './hinoyama'
@@ -15,6 +16,7 @@ const LOCATIONS: readonly LocationConfig[] = [
   hinoyamaLocation,
   kaikyokanLocation,
   ganryujimaLocation,
+  greenmallLocation,
 ]
 
 const seenIds = new Set<string>()

@@ -83,6 +83,12 @@ export interface PersonDetectionLocationConfig extends BaseLocationConfig {
     faceHoleCenterYRatio: number
     faceHoleWidthRatio: number
     faceScale: number
+    renderer?: 'image' | 'textured-hanbok'
+    bodyFit?: {
+      shoulderWidthRatio: number
+      torsoHeightRatio: number
+      blend: number
+    }
   }
   costumeTransparentSeeds?: readonly { xRatio: number; yRatio: number }[]
   detectionThreshold: number
