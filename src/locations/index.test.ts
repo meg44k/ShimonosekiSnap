@@ -42,15 +42,26 @@ describe('locations registry', () => {
     expect(location?.cameraMode).toBe('person-detection')
   })
 
+  it('registers greenmall with the chima jeogori face filter', () => {
+    const location = getLocation('greenmall')
+    expect(location?.name).toBe('グリーンモール')
+    expect(location?.cameraMode).toBe('person-detection')
+    if (location?.cameraMode === 'person-detection') {
+      expect(location.brandLabel).toBe('グリーンモール')
+      expect(location.costumeLayout?.faceHoleCenterYRatio).toBeLessThan(0.2)
+    }
+  })
+
   it('returns undefined for an unknown id', () => {
     expect(getLocation('nonexistent')).toBeUndefined()
   })
 
-  it('lists all registered locations, including tsunoshima, akama, yumetower, karato, hinoyama, kaikyokan, and ganryujima', () => {
+  it('lists all registered locations, including greenmall', () => {
     const locations = listLocations()
     expect(locations.some((location) => location.id === 'tsunoshima')).toBe(true)
     expect(locations.some((location) => location.id === 'akama')).toBe(true)
     expect(locations.some((location) => location.id === 'yumetower')).toBe(true)
+    expect(locations.some((location) => location.id === 'greenmall')).toBe(true)
     expect(locations.some((location) => location.id === 'karato')).toBe(true)
     expect(locations.some((location) => location.id === 'hinoyama')).toBe(true)
     expect(locations.some((location) => location.id === 'kaikyokan')).toBe(true)

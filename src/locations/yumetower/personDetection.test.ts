@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   findBestPerson,
+  fitCostumeTransformToBody,
   findEmptyOverlayPlacement,
   findFaceForPerson,
   findPeople,
   getFaceAlignedCostumePlacement,
   getFixedBrandLayout,
+  getTrackedArm,
   getCostumePlacement,
   getSnowCostumeTransform,
   poseToPersonPrediction,
@@ -154,6 +156,32 @@ describe('smoothFaceBox', () => {
 })
 
 describe('SNOW-style costume tracking', () => {
+  it('tracks each arm from the shoulder to the wrist', () => {
+    const arm = getTrackedArm(
+      [
+        { name: 'left_shoulder', x: 100, y: 120, score: 0.9 },
+        { name: 'left_elbow', x: 130, y: 180, score: 0.9 },
+        { name: 'left_wrist', x: 180, y: 220, score: 0.9 },
+      ],
+      'left',
+    )
+
+    expect(arm?.shoulder).toMatchObject({ x: 100, y: 120 })
+    expect(arm?.end).toMatchObject({ x: 180, y: 220 })
+  })
+
+  it('falls back to the elbow when the wrist is not visible', () => {
+    const arm = getTrackedArm(
+      [
+        { name: 'right_shoulder', x: 200, y: 120, score: 0.9 },
+        { name: 'right_elbow', x: 240, y: 190, score: 0.9 },
+      ],
+      'right',
+    )
+
+    expect(arm?.end).toMatchObject({ x: 240, y: 190 })
+  })
+
   it('anchors the face opening to the detected face and follows eye rotation', () => {
     const transform = getSnowCostumeTransform(
       { xMin: 100, yMin: 60, width: 120, height: 140 },
@@ -170,6 +198,62 @@ describe('SNOW-style costume tracking', () => {
     expect(transform.anchorX).toBe(160)
     expect(transform.anchorY).toBe(130)
     expect(transform.rotation).toBeGreaterThan(0)
+  })
+
+  it('supports costume-specific face opening proportions', () => {
+    const defaultTransform = getSnowCostumeTransform(
+      { xMin: 100, yMin: 60, width: 120, height: 140 },
+      [],
+      [],
+      2 / 3,
+    )
+    const hanbokTransform = getSnowCostumeTransform(
+      { xMin: 100, yMin: 60, width: 120, height: 140 },
+      [],
+      [],
+      2 / 3,
+      0.22,
+      1.08,
+    )
+
+    expect(hanbokTransform.width).toBeGreaterThan(defaultTransform.width)
+    expect(hanbokTransform.anchorX).toBe(defaultTransform.anchorX)
+    expect(hanbokTransform.anchorY).toBe(defaultTransform.anchorY)
+  })
+
+  it('fits costume width and height to visible shoulders and hips', () => {
+    const fitted = fitCostumeTransformToBody(
+      { anchorX: 160, anchorY: 130, width: 400, height: 600, rotation: 0 },
+      [
+        { name: 'left_shoulder', x: 260, y: 250, score: 0.9 },
+        { name: 'right_shoulder', x: 60, y: 250, score: 0.9 },
+        { name: 'left_hip', x: 230, y: 430, score: 0.9 },
+        { name: 'right_hip', x: 90, y: 430, score: 0.9 },
+      ],
+      2 / 3,
+      { shoulderWidthRatio: 0.46, torsoHeightRatio: 0.18, blend: 0.7 },
+    )
+
+    expect(fitted.width).toBeGreaterThan(400)
+    expect(fitted.height).toBeGreaterThan(600)
+    expect(fitted.anchorX).toBe(160)
+  })
+
+  it('keeps face-only sizing when shoulders are not visible', () => {
+    const faceTransform = {
+      anchorX: 160,
+      anchorY: 130,
+      width: 400,
+      height: 600,
+      rotation: 0,
+    }
+    expect(
+      fitCostumeTransformToBody(faceTransform, [], 2 / 3, {
+        shoulderWidthRatio: 0.46,
+        torsoHeightRatio: 0.18,
+        blend: 0.7,
+      }),
+    ).toBe(faceTransform)
   })
 
   it('uses a location-specific face opening when sizing headwear', () => {
