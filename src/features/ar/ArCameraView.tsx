@@ -1,14 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 // @ts-expect-error mind-ar has no bundled TypeScript types
 import { MindARThree } from 'mind-ar/dist/mindar-image-three.prod.js'
 import * as THREE from 'three'
 import type { ArTransform, ImageTargetLocationConfig } from '../../locations/types'
 import { captureComposite } from './captureComposite'
 import { createLineArtRenderer, WHALE_LINEART_LAYER, type LineArtRenderer } from './lineArtRenderer'
+import { useVideoCapture, type CompositeSources } from './useVideoCapture'
+import { CameraModeToggle, RecordingIndicator } from './CameraControls'
 
 interface ArCameraViewProps {
   location: ImageTargetLocationConfig
-  onCapture: (photoDataUrl: string) => void
+  onCapture: (url: string, kind?: 'photo' | 'video', blob?: Blob) => void
   onClose: () => void
   onError: (message: string) => void
 }
@@ -208,7 +210,7 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
               if (!videoEl) {
                 onError('カメラ映像を取得できませんでした')
               } else {
-                onCapture(captureComposite(videoEl, renderer.domElement))
+                onCapture(captureComposite(videoEl, renderer.domElement), 'photo')
               }
             } catch (error) {
               console.error('[ar] failed to capture photo', error)
@@ -259,44 +261,77 @@ export function ArCameraView({ location, onCapture, onClose, onError }: ArCamera
     }
   }, [location, onError])
 
+  const getSources = useCallback((): CompositeSources | null => {
+    const mindar = mindarRef.current
+    const video: HTMLVideoElement | undefined =
+      mindar?.video ?? containerRef.current?.querySelector('video') ?? undefined
+    const overlay: HTMLCanvasElement | undefined = mindar?.renderer?.domElement
+    if (!video || !overlay) return null
+    return { video, overlay, isMirror: false }
+  }, [])
+
+  const { videoSupported, mode, setMode, recording, elapsedSec, startRecording, stopRecording } =
+    useVideoCapture({
+      getSources,
+      onVideo: (url, blob) => onCapture(url, 'video', blob),
+      onError,
+    })
+
   const handleShutter = () => {
+    if (mode === 'video') {
+      if (recording) stopRecording()
+      else startRecording()
+      return
+    }
     captureRequestedRef.current = true
   }
 
   // MindARThree 公式の switchCamera() は shouldFaceUser を反転して stop()→start()
   // する(同一インスタンスを再利用するのでレンダラ/アンカーの作り直しは無い)。
   const toggleFacing = () => {
-    if (ready) mindarRef.current?.switchCamera()
+    if (ready && !recording) mindarRef.current?.switchCamera()
   }
 
   return (
     <div className="camera-screen">
       <div className="video-container">
         <div className="ar-container" ref={containerRef} />
-        {(!ready || !targetFound) && (
+        {recording && <RecordingIndicator elapsedSec={elapsedSec} />}
+        {!recording && (!ready || !targetFound) && (
           <div className="ar-status-overlay">{!ready ? 'カメラを起動中...' : location.guidanceText}</div>
         )}
       </div>
+      {videoSupported && !recording && (
+        <CameraModeToggle mode={mode} onChange={setMode} disabled={!ready} />
+      )}
       <div className="camera-controls">
         <button
           type="button"
           className="btn btn-icon"
           onClick={toggleFacing}
-          disabled={!ready}
+          disabled={!ready || recording}
           title="イン/アウトカメラ切り替え"
         >
           🔄
         </button>
         <button
           type="button"
-          className="btn btn-shutter"
+          className={`btn btn-shutter${mode === 'video' ? ' is-video' : ''}${
+            recording ? ' is-recording' : ''
+          }`}
           onClick={handleShutter}
           disabled={!ready}
-          title="撮影"
+          title={mode === 'video' ? (recording ? '録画停止' : '録画開始') : '撮影'}
         >
           <span className="shutter-inner" />
         </button>
-        <button type="button" className="btn btn-icon" onClick={onClose} title="閉じる">
+        <button
+          type="button"
+          className="btn btn-icon"
+          onClick={onClose}
+          disabled={recording}
+          title="閉じる"
+        >
           ✕
         </button>
       </div>
