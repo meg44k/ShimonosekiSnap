@@ -10,6 +10,8 @@ export function GuidancePage() {
 
   const getIcon = (id: string) => {
     switch (id) {
+      case 'kaikyokan':
+        return '🐧'
       case 'ganryujima':
         return '⚔️'
       case 'akama':

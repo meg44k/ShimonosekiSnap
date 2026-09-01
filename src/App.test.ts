@@ -23,6 +23,12 @@ describe('resolveLocation', () => {
     expect(location?.name).toBe('海峡ゆめタワー')
   })
 
+  it('returns the location config for kaikyokan spot', () => {
+    const location = resolveLocation('/spot/kaikyokan')
+    expect(location?.id).toBe('kaikyokan')
+    expect(location?.name).toBe('海響館')
+  })
+
   it('returns the location config for ganryujima spot', () => {
     const location = resolveLocation('/spot/ganryujima')
     expect(location?.id).toBe('ganryujima')

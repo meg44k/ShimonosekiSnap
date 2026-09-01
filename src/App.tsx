@@ -15,8 +15,16 @@ const PersonDetectionCameraView = lazy(() =>
   })),
 )
 
+const KaikyokanCameraView = lazy(() =>
+  import('./locations/kaikyokan/KaikyokanCameraView').then((module) => ({
+    default: module.KaikyokanCameraView,
+  })),
+)
+
 const GanryuCameraView = lazy(() =>
-  import('./locations/ganryujima/GanryuCameraView').then((module) => ({ default: module.GanryuCameraView })),
+  import('./locations/ganryujima/GanryuCameraView').then((module) => ({
+    default: module.GanryuCameraView,
+  })),
 )
 
 const CompilePage = lazy(() =>
@@ -118,13 +126,15 @@ function App() {
   }
 
   const locationIcon =
-    location.id === 'ganryujima'
-      ? '⚔️'
-      : location.id === 'akama'
-        ? '⛩️'
-        : location.id === 'yumetower'
-          ? '🗼'
-          : '🌊'
+    location.id === 'kaikyokan'
+      ? '🐧'
+      : location.id === 'ganryujima'
+        ? '⚔️'
+        : location.id === 'akama'
+          ? '⛩️'
+          : location.id === 'yumetower'
+            ? '🗼'
+            : '🌊'
 
   return (
     <div className="app">
@@ -177,7 +187,15 @@ function App() {
 
         {state === 'camera' && (
           <Suspense fallback={<div className="camera-screen" />}>
-            {location.id === 'ganryujima' ? (
+            {location.id === 'kaikyokan' ? (
+              <KaikyokanCameraView
+                key={location.id}
+                location={location}
+                onCapture={handleCapture}
+                onClose={() => setState('idle')}
+                onError={handleArError}
+              />
+            ) : location.id === 'ganryujima' ? (
               <GanryuCameraView
                 key={location.id}
                 location={location}

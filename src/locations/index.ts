@@ -1,6 +1,7 @@
 import { akamaLocation } from './akama'
 import { ganryujimaLocation } from './ganryujima'
 import { hinoyamaLocation } from './hinoyama'
+import { kaikyokanLocation } from './kaikyokan'
 import { karatoLocation } from './karato'
 import { tsunoshimaLocation } from './tsunoshima'
 import type { LocationConfig } from './types'
@@ -12,6 +13,7 @@ const LOCATIONS: readonly LocationConfig[] = [
   yumetowerLocation,
   karatoLocation,
   hinoyamaLocation,
+  kaikyokanLocation,
   ganryujimaLocation,
 ]
 
